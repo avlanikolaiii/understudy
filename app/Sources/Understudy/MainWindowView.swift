@@ -10,6 +10,7 @@ struct MainWindowView: View {
     var openSettings: () -> Void = {}
 
     private var activeSkill: Skill {
+        // The built-in sample is only a fallback in Sample mode; account rehearsals need a saved skill.
         library.skills.first(where: { $0.id == ui.selectedSkill?.id }) ?? library.skills.first ?? .sample
     }
     private var receipt: Receipt? {
@@ -178,10 +179,10 @@ struct MainWindowView: View {
             HStack(spacing: 12) {
                 primary("Rehearse sample", symbol: "play.fill") {
                     let skill = activeSkill
-                    activity.rehearse(skill, scenario: ui.scenario, record: { library.record($0, skill: skill) }) { receipt in
+                    activity.rehearse(skill, scenario: ui.scenario, record: library.recorder(for: skill)) { receipt in
                         ui.selectedReceipt = receipt.id; ui.page = .results
                     }
-                }.disabled(activity.isRehearsing)
+                }.disabled(activity.isRehearsing || !library.canRehearse)
                 if activity.isRehearsing {
                     ProgressView().controlSize(.small)
                     Text("Rehearsing in the notch (read-only)…").font(.callout).foregroundStyle(.secondary)

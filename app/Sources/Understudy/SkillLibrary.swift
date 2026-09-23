@@ -24,6 +24,8 @@ final class SkillLibrary: ObservableObject {
     private var local = LocalLibraryFile.Contents(skills: [.sample], receipts: [])
     private var canSaveLocal = true
     private var bag = Set<AnyCancellable>()
+    /// Changes on every sign-in or sign-out. Async work started under an older owner is dropped.
+    private var owner = 0
 
     init(auth: AppModel, file: LocalLibraryFile = .standard) {
         self.auth = auth
@@ -47,6 +49,9 @@ final class SkillLibrary: ObservableObject {
         }
     }
 
+    /// In an account, rehearsals need a skill that's really saved there.
+    var canRehearse: Bool { mode == .sample || (!loading && !skills.isEmpty) }
+
     var skillCountText: String {
         let owned = skills.filter { !$0.isSample }.count   // the sample skill doesn't count toward the limit
         return plan == "free" ? "\(owned) of \(AppConfig.freeSkillLimit) skills used" : "\(owned) skills"
@@ -63,18 +68,35 @@ final class SkillLibrary: ObservableObject {
             done(skill)
         case .account:
             guard let client = auth.client else { return }
+            let started = owner
             Task {
                 do {
                     let row: SkillRow = try await client.from("skills")
                         .insert(NewSkillRow(skill))
                         .select(SkillRow.columns).single().execute().value
+                    guard started == owner else { return }
                     let saved = row.skill
                     skills.append(saved)
                     done(saved)
                 } catch {
+                    guard started == owner else { return }
                     notice = "The skill wasn't saved to your account: \(Self.describe(error))"
                 }
             }
+        }
+    }
+
+    /// Returns a recorder bound to whoever is signed in now. If the user signs in or out
+    /// before the rehearsal finishes, its receipt is shown but not saved anywhere.
+    func recorder(for skill: Skill) -> (Receipt) -> Receipt {
+        let started = owner
+        return { [weak self] receipt in
+            guard let self else { return receipt }
+            guard started == self.owner else {
+                self.notice = "You signed in or out during the rehearsal, so its receipt wasn't saved."
+                return receipt
+            }
+            return self.record(receipt, skill: skill)
         }
     }
 
@@ -125,11 +147,15 @@ final class SkillLibrary: ObservableObject {
     // MARK: Switching between sample mode and the account
 
     private func authChanged(_ phase: AppModel.Phase) {
+        let newMode: Mode
+        if case .signedIn(let email) = phase { newMode = .account(email: email) } else { newMode = .sample }
+        guard newMode != mode else { return }
+        owner += 1
         if case .signedIn(let email) = phase {
             mode = .account(email: email)
             skills = []; receipts = []
             Task { await loadAccount() }
-        } else if mode != .sample {
+        } else {
             mode = .sample
             plan = "free"
             showLocal()
@@ -149,23 +175,27 @@ final class SkillLibrary: ObservableObject {
 
     private func loadAccount() async {
         guard let client = auth.client else { return }
+        let started = owner
         loading = true
-        defer { loading = false }
+        defer { if started == owner { loading = false } }
         do {
-            if let profile: ProfileRow = try? await client.from("profiles").select("plan").single().execute().value {
-                plan = profile.plan
-            }
+            let profile: ProfileRow? = try? await client.from("profiles").select("plan").single().execute().value
+            guard started == owner else { return }
+            if let profile { plan = profile.plan }
             var rows: [SkillRow] = try await client.from("skills").select(SkillRow.columns).order("created_at").execute().value
             if rows.isEmpty {
                 // First sign-in: add the sample skill so the account isn't empty. It's marked as a sample.
                 try await client.from("skills").insert(NewSkillRow(.sample)).execute()
                 rows = try await client.from("skills").select(SkillRow.columns).order("created_at").execute().value
             }
-            skills = rows.map(\.skill)
             let receiptRows: [ReceiptRow] = try await client.from("receipts").select(ReceiptRow.columns)
                 .order("created_at", ascending: false).limit(50).execute().value
+            // Signed out or switched accounts while loading: drop the old owner's data.
+            guard started == owner else { return }
+            skills = rows.map(\.skill)
             receipts = receiptRows.map(\.receipt)
         } catch {
+            guard started == owner else { return }
             notice = "Signed in, but your skills couldn't load: \(Self.describe(error))"
         }
     }

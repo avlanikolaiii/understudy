@@ -110,6 +110,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// The landing page's story: the shortcut starts Watch, and pressing it again stops Watch
     /// and opens the review in the main window.
     @objc private func shortcutPressed() {
+        // Stopping Watch always wins, even while a rehearsal or receipt is showing in the notch.
+        if watch.isPlaying {
+            ui.reviewWatch(watch)
+            workspace.show()
+            return
+        }
         switch activity.mode {
         case .watching:
             ui.reviewWatch(watch)
