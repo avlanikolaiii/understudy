@@ -45,6 +45,9 @@ final class AppModel: ObservableObject {
     @Published private(set) var busy = false
     @Published var emailDraft = ""
 
+    @Published var shortcutLabel = "⌥ Space"
+    var openSettings: (() -> Void)?
+
     let client: SupabaseClient?
 
     init() {

@@ -32,7 +32,7 @@ struct PanelView: View {
         VStack(alignment: .leading, spacing: 16) {
             header
             if watch.isPresented {
-                WatchView(session: watch)
+                WatchView(session: watch, shortcutLabel: model.shortcutLabel)
             } else {
                 Button { watch.start() } label: {
                     HStack(spacing: 10) {
@@ -73,6 +73,12 @@ struct PanelView: View {
                 .accessibilityHidden(true)
             Text("Understudy").font(.system(size: 14, weight: .bold))
             Spacer()
+            Button { onClose(); model.openSettings?() } label: {
+                Image(systemName: "gearshape").font(.system(size: 13))
+            }
+            .buttonStyle(.plain).foregroundStyle(Theme.muted)
+            .accessibilityLabel("Keyboard shortcut settings")
+            .help("Change keyboard shortcut · \(model.shortcutLabel)")
             Button(action: onClose) { Image(systemName: "xmark").font(.system(size: 11, weight: .bold)) }
                 .buttonStyle(.plain).foregroundStyle(Theme.muted)
                 .keyboardShortcut(.cancelAction)

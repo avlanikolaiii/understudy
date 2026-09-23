@@ -19,6 +19,7 @@ struct WatchPulse: View {
 
 struct WatchView: View {
     @ObservedObject var session: WatchSession
+    var shortcutLabel = "⌥ Space"
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -86,7 +87,7 @@ struct WatchView: View {
                 if session.isPlaying {
                     Button("Stop", role: .destructive) { session.stop() }
                         .buttonStyle(WatchPrimaryButton(color: Theme.warn))
-                        .help("Stop the simulated replay · Option-Space")
+                        .help("Stop the simulated replay · \(shortcutLabel)")
                 } else {
                     Button("Replay") { session.start(keepingRules: true) }.buttonStyle(.bordered)
                     Button("Done") { session.dismiss() }

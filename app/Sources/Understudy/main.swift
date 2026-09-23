@@ -1,57 +1,46 @@
 import AppKit
-import Carbon
-
-/// ⌥ Space from anywhere. Uses a Carbon hot key, which doesn't need Accessibility access.
-final class HotKey {
-    private var ref: EventHotKeyRef?
-    private var handler: EventHandlerRef?
-    fileprivate let action: () -> Void
-
-    init(keyCode: UInt32, modifiers: UInt32, action: @escaping () -> Void) {
-        self.action = action
-        var spec = EventTypeSpec(eventClass: OSType(kEventClassKeyboard), eventKind: UInt32(kEventHotKeyPressed))
-        InstallEventHandler(GetApplicationEventTarget(), { _, _, userData in
-            guard let userData else { return noErr }
-            let hotKey = Unmanaged<HotKey>.fromOpaque(userData).takeUnretainedValue()
-            DispatchQueue.main.async { hotKey.action() }
-            return noErr
-        }, 1, &spec, Unmanaged.passUnretained(self).toOpaque(), &handler)
-        RegisterEventHotKey(keyCode, modifiers, EventHotKeyID(signature: OSType(0x5553_5459), id: 1),
-                            GetApplicationEventTarget(), 0, &ref)
-    }
-
-    deinit {
-        if let ref { UnregisterEventHotKey(ref) }
-        if let handler { RemoveEventHandler(handler) }
-    }
-}
+import Combine
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     let model = AppModel()
     private var notch: NotchController!
     private var statusItem: NSStatusItem!
-    private var hotKey: HotKey?
+    private let shortcuts = ShortcutManager()
+    private var shortcutSettings: ShortcutSettingsController!
+    private var shortcutObservation: AnyCancellable?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         notch = NotchController(model: model)
+        shortcutSettings = ShortcutSettingsController(manager: shortcuts)
+        model.openSettings = { [weak self] in self?.shortcutSettings.show() }
 
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         statusItem.button?.image = NSImage(systemSymbolName: "theatermasks", accessibilityDescription: "Understudy")
         let menu = NSMenu()
-        let open = NSMenuItem(title: "Open Understudy", action: #selector(openPanel), keyEquivalent: " ")
-        open.keyEquivalentModifierMask = [.option]
+        let open = NSMenuItem(title: "Open Understudy", action: #selector(openPanel), keyEquivalent: "")
         open.target = self
         menu.addItem(open)
+        let settingsItem = NSMenuItem(title: "Keyboard Shortcut…", action: #selector(openSettings), keyEquivalent: ",")
+        settingsItem.target = self
+        menu.addItem(settingsItem)
         menu.addItem(.separator())
         menu.addItem(NSMenuItem(title: "Quit Understudy", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
         statusItem.menu = menu
 
-        hotKey = HotKey(keyCode: UInt32(kVK_Space), modifiers: UInt32(optionKey)) { [weak self] in
-            Task { @MainActor in self?.notch.toggle() }
+        shortcutObservation = shortcuts.objectWillChange.sink { [weak self, weak open] _ in
+            DispatchQueue.main.async {
+                guard let self else { return }
+                let label = self.shortcuts.shortcut.display
+                self.model.shortcutLabel = self.shortcuts.isActive ? label : "Shortcut unavailable"
+                open?.title = self.shortcuts.isActive ? "Open Understudy (\(label))" : "Open Understudy (shortcut unavailable)"
+            }
         }
+        shortcuts.start { [weak self] in self?.notch.toggle() }
         model.start()
     }
+
+    @objc private func openSettings() { shortcutSettings.show() }
 
     @objc private func openPanel() { notch.expand() }
 

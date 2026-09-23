@@ -8,7 +8,7 @@ interaction are real; the displayed workflow is simulated.
 ## Try it
 
 1. Run `app/scripts/bundle.sh`, then open `app/build/Understudy.app`.
-2. Press Option-Space, click the notch, or choose **Open Understudy** from the menu bar.
+2. Press your configured shortcut (Option-Space by default), click the notch, or choose **Open Understudy** from the menu bar.
 3. Choose **Watch a new task**, labeled **Simulated**. No account setup is needed.
 4. Watch the pulsing dot, elapsed timer, and five steps advance every five seconds.
 5. Enter a rule and press Return or **Add**. Blank rules are ignored. Notes stay in
@@ -19,7 +19,7 @@ interaction are real; the displayed workflow is simulated.
 7. Let a replay finish: at 25 seconds it says **Replay complete**. It does not
    claim to have learned a skill or start the next slice.
 
-Option-Space stops an active replay and shows its partial result. Clicking the
+The configured shortcut stops an active replay and shows its partial result. Clicking the
 collapsed notch during playback does the same. This follows the original
 teaching interaction described in the Claude conversation.
 
@@ -27,6 +27,8 @@ Collapsing the panel with Escape, the close control, or clicking away leaves the
 replay running. The menu-bar **Open Understudy** item reopens it for inspection.
 The collapsed notch dot pulses during playback. Reduced Motion uses a steady dot. A new Watch session
 after **Done**, or quitting the app, clears these temporary notes.
+
+Change the shortcut through the notch gear or the menu-bar **Keyboard Shortcut…** item. See `docs/keyboard-shortcuts.md`.
 
 ## Check the session behavior
 

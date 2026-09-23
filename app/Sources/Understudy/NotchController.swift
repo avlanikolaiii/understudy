@@ -77,7 +77,7 @@ final class NotchController: NSObject, NSWindowDelegate {
     // MARK: Open and close
 
     func toggle() {
-        // The teaching interaction uses Option-Space (or the collapsed notch)
+        // The teaching interaction uses the configured shortcut (or the collapsed notch)
         // to stop watching and leave the captured sample available for inspection.
         if watch.isPlaying {
             watch.stop()

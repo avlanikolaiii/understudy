@@ -26,9 +26,12 @@ The capture experiments and customer validation are **paused**. Keep their files
 Create the Supabase project, the Google OAuth client, and the Apple Services ID and key, then create `app/config.local.json` (see `app/config.example.json`). Until then, the app shows "Not connected to a server yet".
 
 ### Done after handoff (slice 2)
-- **Watch, simulated:** a five-step predefined replay in the notch, pulsing indicator, timer, temporary rules, Stop, Replay, and Done. Available without sign-in. Option-Space stops an active replay.
+- **Watch, simulated:** a five-step predefined replay in the notch, pulsing indicator, timer, temporary rules, Stop, Replay, and Done. Available without sign-in. The configured global shortcut (default Option-Space) stops an active replay.
 - Release bundle, session checks, and rendered-view checks passed. Full notch/shortcut interaction and the no-notch fallback are not yet verified end to end. See `docs/watch-slice.md`.
 - `docs/product-context.md` captures the original Claude conversations, product artifacts, superseded ideas, and unresolved design gaps. Read it before changing the product direction.
+
+### Shortcut settings
+- The notch gear and menu-bar **Keyboard Shortcut…** open a native recorder. The shortcut persists across launches, supports restoring Option-Space, and retains the old binding when a remap fails. See `docs/keyboard-shortcuts.md`.
 
 ### Next slices, in order
 1. **Skill review**: the learned skill shown in plain words (trigger, steps, inputs, rules), with rules editable. The skill is prepared in advance (*simulated* learning) and saved to `skills.definition` (jsonb).
