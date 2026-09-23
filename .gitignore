@@ -1,0 +1,23 @@
+# Never commit these.
+
+# Capture logs and outputs from local runs
+runs/
+out/
+*.pdf
+
+# Credentials and tokens
+.env
+.env.*
+*.pem
+*.p12
+credentials*.json
+token*.json
+
+# Real agency examples shared with permission stay local only
+client-examples/
+
+# Build products
+.build/
+tools/ax-capture/ax-capture
+*.dmg
+.DS_Store
