@@ -48,6 +48,8 @@ final class AppModel: ObservableObject {
     @Published var shortcutLabel = "⌥ Space"
     var openSettings: (() -> Void)?
 
+    var openWorkspace: (() -> Void)?
+
     let client: SupabaseClient?
 
     init() {

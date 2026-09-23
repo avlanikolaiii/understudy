@@ -23,6 +23,11 @@ The configured shortcut stops an active replay and shows its partial result. Cli
 collapsed notch during playback does the same. This follows the original
 teaching interaction described in the Claude conversation.
 
+The main app's **Teach a skill → Start Watch demo** starts the same session.
+Both surfaces share its timer, progress, and notes. In the app, **Review sample
+skill** carries the notes into the local sample review. This is still a predefined
+example, not recorded or learned behavior.
+
 Collapsing the panel with Escape, the close control, or clicking away leaves the
 replay running. The menu-bar **Open Understudy** item reopens it for inspection.
 The collapsed notch dot pulses during playback. Reduced Motion uses a steady dot. A new Watch session

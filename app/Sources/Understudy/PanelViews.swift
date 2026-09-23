@@ -43,6 +43,17 @@ struct PanelView: View {
                     }.padding(12).background(Theme.card, in: RoundedRectangle(cornerRadius: 8))
                 }.buttonStyle(.plain)
                     .accessibilityHint("Starts a predefined local replay. No account or recording permission needed.")
+                Button { model.openWorkspace?(); onClose() } label: {
+                    HStack {
+                        Image(systemName: "rectangle.3.group")
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text("Open your workspace").font(.system(size: 14, weight: .semibold))
+                            Text("Explore the local demo. No account needed.").font(.system(size: 11))
+                        }
+                        Spacer()
+                        Image(systemName: "arrow.up.right")
+                    }.padding(12).frame(maxWidth: .infinity)
+                }.buttonStyle(.borderedProminent).tint(Theme.ghostLight).foregroundStyle(.black)
                 switch model.phase {
                 case .notConfigured: NotConfiguredView()
                 case .loading: ProgressView().controlSize(.small).frame(maxWidth: .infinity, alignment: .center).padding(.vertical, 30)
@@ -92,7 +103,7 @@ struct NotConfiguredView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("Not connected to a server yet").font(.system(size: 15, weight: .semibold))
-            Text("Add your Supabase project URL and anon key to app/config.local.json, then rebuild. The steps are in docs/setup/accounts.md.")
+            Text("Account sync is not configured. You can use the local sample workspace above without signing in.")
                 .font(.system(size: 13)).foregroundStyle(Theme.muted)
                 .fixedSize(horizontal: false, vertical: true)
         }

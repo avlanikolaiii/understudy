@@ -33,6 +33,11 @@ Create the Supabase project, the Google OAuth client, and the Apple Services ID 
 ### Shortcut settings
 - The notch gear and menu-bar **Keyboard Shortcut…** open a native recorder. The shortcut persists across launches, supports restoring Option-Space, and retains the old binding when a remap fails. See `docs/keyboard-shortcuts.md`.
 
+### Main app teaching and native workspace
+- The workspace and notch share a single simulated Watch session. Start from **Teach a skill** in the main app, stop/replay in either surface, and carry notes into local sample-skill review.
+- The main window uses a native sidebar and toolbar, system appearance, Dock entry, and standard menus. Command-N opens teaching; Command-comma opens shortcut settings.
+- The existing local sample skill/rehearsal/export prototype is retained. It does not replace the account-backed slices below. See `docs/interface-prototype.md`.
+
 ### Next slices, in order
 1. **Skill review**: the learned skill shown in plain words (trigger, steps, inputs, rules), with rules editable. The skill is prepared in advance (*simulated* learning) and saved to `skills.definition` (jsonb).
 2. **Rehearse**: two past teaching weeks, a read-only badge, its version and what was sent side by side, matches and differences, then Hand off / Rehearse again / Correct (a correction applies to this workflow only).

@@ -21,7 +21,7 @@ final class NotchState: ObservableObject {
 final class NotchController: NSObject, NSWindowDelegate {
     private let model: AppModel
     private let state = NotchState()
-    private let watch = WatchSession()
+    private let watch: WatchSession
     private let panel: NotchPanel
     private var hosting: NSHostingView<NotchRootView>!
     private var bag = Set<AnyCancellable>()
@@ -30,8 +30,9 @@ final class NotchController: NSObject, NSWindowDelegate {
     let hasNotch: Bool
     private let notchSize: CGSize
 
-    init(model: AppModel) {
+    init(model: AppModel, watch: WatchSession) {
         self.model = model
+        self.watch = watch
         let screens = NSScreen.screens
         let notched = screens.first { $0.safeAreaInsets.top > 0 }
         screen = notched ?? NSScreen.main ?? screens[0]

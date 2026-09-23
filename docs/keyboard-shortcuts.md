@@ -33,3 +33,14 @@ app/scripts/bundle.sh
 Checks cover persistence, invalid keys, cancellation, restore, failed startup,
 failed remapping, retaining the old registration until its replacement succeeds,
 layout-label changes, event conversion, and real Carbon conflict/release behavior.
+
+## Verification on 2026-09-23
+
+- Shortcut checks passed, including real Carbon duplicate-registration rejection
+  and successful reuse after releasing a registration.
+- Opened the native settings window using Command-comma and inspected its saved
+  shortcut and recorder controls. The recorder entered its listening state in the
+  isolated UI check.
+- Complete keystroke remapping and global notch activation were not verified end
+  to end through UI automation. Window-state changes and capture errors interrupted
+  those checks; the underlying registration and preference behavior passed tests.

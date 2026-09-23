@@ -23,8 +23,9 @@ recurring task their usual way, and adds rules as needed. Understudy should turn
 that demonstration into an inspectable skill, rehearse on different inputs, and
 eventually run the work with verifiable results.
 
-The notch is the signature and the default entry point. The menu bar, keyboard,
-and a normal window provide other ways to use it. Voice is a later feature.
+The notch is the signature companion. In the September 23 continuation, the user
+explicitly required teaching from the main app too and a more Mac-native window.
+The workspace, notch, menu bar, and keyboard are complementary entry points. Voice is a later feature.
 The user rejected recording a video and uploading it as the core experience.
 Watching is deliberate, with a visible indicator; it is not always-on capture.
 
@@ -93,10 +94,10 @@ configuration and end-to-end verification.
 
 ## Gaps to resolve as the approved slices are built
 
-1. **Keep one coherent teaching flow.** The current workspace and notch have
-   separate demo state. Skill review should carry the Watch steps and rules
-   forward, while keeping the simulation label visible. Avoid making the user
-   re-enter the same task in two places.
+1. **Keep one coherent teaching flow.** The workspace and notch now share one
+   Watch session, and demo notes carry into the local sample-skill review.
+   Account-backed skill definitions, editable steps, and AI learning are still
+   future work. Keep the simulation label visible.
 2. **Reconcile data location before making promises.** The landing page says
    skills, memory, and receipts stay on the Mac with optional cloud sync. The
    later prototype direction ties data to accounts and Supabase. Define what
