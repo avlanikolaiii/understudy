@@ -86,6 +86,7 @@ struct WatchView: View {
                 if session.isPlaying {
                     Button("Stop", role: .destructive) { session.stop() }
                         .buttonStyle(WatchPrimaryButton(color: Theme.warn))
+                        .help("Stop the simulated replay · Option-Space")
                 } else {
                     Button("Replay") { session.start(keepingRules: true) }.buttonStyle(.bordered)
                     Button("Done") { session.dismiss() }

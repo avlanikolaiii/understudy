@@ -19,9 +19,13 @@ interaction are real; the displayed workflow is simulated.
 7. Let a replay finish: at 25 seconds it says **Replay complete**. It does not
    claim to have learned a skill or start the next slice.
 
-Collapsing the panel, including with Escape or clicking away, leaves the replay
-running. Reopen it to inspect progress or stop it. The collapsed notch dot also
-pulses during playback. Reduced Motion uses a steady dot. A new Watch session
+Option-Space stops an active replay and shows its partial result. Clicking the
+collapsed notch during playback does the same. This follows the original
+teaching interaction described in the Claude conversation.
+
+Collapsing the panel with Escape, the close control, or clicking away leaves the
+replay running. The menu-bar **Open Understudy** item reopens it for inspection.
+The collapsed notch dot pulses during playback. Reduced Motion uses a steady dot. A new Watch session
 after **Done**, or quitting the app, clears these temporary notes.
 
 ## Check the session behavior

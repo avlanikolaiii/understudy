@@ -76,7 +76,16 @@ final class NotchController: NSObject, NSWindowDelegate {
 
     // MARK: Open and close
 
-    func toggle() { state.expanded ? collapse() : expand() }
+    func toggle() {
+        // The teaching interaction uses Option-Space (or the collapsed notch)
+        // to stop watching and leave the captured sample available for inspection.
+        if watch.isPlaying {
+            watch.stop()
+            expand()
+        } else {
+            state.expanded ? collapse() : expand()
+        }
+    }
 
     func expand() {
         guard !state.expanded else { panel.makeKey(); return }

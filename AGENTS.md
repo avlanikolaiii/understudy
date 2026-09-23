@@ -25,13 +25,17 @@ The capture experiments and customer validation are **paused**. Keep their files
 ### Waiting on the human
 Create the Supabase project, the Google OAuth client, and the Apple Services ID and key, then create `app/config.local.json` (see `app/config.example.json`). Until then, the app shows "Not connected to a server yet".
 
+### Done after handoff (slice 2)
+- **Watch, simulated:** a five-step predefined replay in the notch, pulsing indicator, timer, temporary rules, Stop, Replay, and Done. Available without sign-in. Option-Space stops an active replay.
+- Release bundle, session checks, and rendered-view checks passed. Full notch/shortcut interaction and the no-notch fallback are not yet verified end to end. See `docs/watch-slice.md`.
+- `docs/product-context.md` captures the original Claude conversations, product artifacts, superseded ideas, and unresolved design gaps. Read it before changing the product direction.
+
 ### Next slices, in order
-1. **Watch** (*simulated*, and labeled as such): a scripted replay of the captured steps in the notch, with a pulsing dot, a timer, a step list, a "type a rule" field, and Stop.
-2. **Skill review**: the learned skill shown in plain words (trigger, steps, inputs, rules), with rules editable. The skill is prepared in advance (*simulated* learning) and saved to `skills.definition` (jsonb).
-3. **Rehearse**: two past teaching weeks, a read-only badge, its version and what was sent side by side, matches and differences, then Hand off / Rehearse again / Correct (a correction applies to this workflow only).
-4. **Run and receipt**: compute the report from the sheet using `docs/report-spec.md`, write the Markdown file to a local git-ignored folder, read it back as evidence, and save the receipt to `receipts`. Include a toggle for a week with **ad spend missing**: the report stays an incomplete draft, the tracker says it needs input, and the email is held back.
-5. **Google Sheets connector** (read-only scope; rehearsal must use a read-only token).
-6. **AI proxy**: a Supabase Edge Function that holds the Anthropic key server-side and is used for summary and highlight text. Never put the key in the app.
+1. **Skill review**: the learned skill shown in plain words (trigger, steps, inputs, rules), with rules editable. The skill is prepared in advance (*simulated* learning) and saved to `skills.definition` (jsonb).
+2. **Rehearse**: two past teaching weeks, a read-only badge, its version and what was sent side by side, matches and differences, then Hand off / Rehearse again / Correct (a correction applies to this workflow only).
+3. **Run and receipt**: compute the report from the sheet using `docs/report-spec.md`, write the Markdown file to a local git-ignored folder, read it back as evidence, and save the receipt to `receipts`. Include a toggle for a week with **ad spend missing**: the report stays an incomplete draft, the tracker says it needs input, and the email is held back.
+4. **Google Sheets connector** (read-only scope; rehearsal must use a read-only token).
+5. **AI proxy**: a Supabase Edge Function that holds the Anthropic key server-side and is used for summary and highlight text. Never put the key in the app.
 
 ## Rules you must follow
 
