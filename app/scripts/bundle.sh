@@ -3,9 +3,10 @@
 #   app/scripts/bundle.sh          → app/build/Understudy.app
 # If app/config.local.json exists, it's copied into the bundle (it's git-ignored).
 set -e
+CONFIGURATION="${CONFIGURATION:-release}"
 cd "$(dirname "$0")/.."
-swift build -c release
-BIN="$(swift build -c release --show-bin-path)/Understudy"
+swift build -c "$CONFIGURATION"
+BIN="$(swift build -c "$CONFIGURATION" --show-bin-path)/Understudy"
 APP="build/Understudy.app"
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
