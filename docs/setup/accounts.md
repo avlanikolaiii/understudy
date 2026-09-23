@@ -11,7 +11,7 @@ The redirect address the app listens on is **`understudy://auth-callback`**.
 ## 1 · Supabase project (about 10 minutes)
 
 1. Create a project: <https://supabase.com/dashboard/new>. Pick a region close to your users (for Peru, `sa-east-1` São Paulo or `us-east-1`).
-2. **Create the tables.** Open the SQL editor, paste all of `supabase/migrations/0001_accounts_and_skills.sql`, and run it.
+2. **Create the tables.** Open the SQL editor, paste all of `supabase/migrations/0001_accounts_and_skills.sql` and run it, then do the same with `0002_receipt_details.sql`.
 3. **Let the app open sign-in links.** Go to Authentication → URL Configuration → Redirect URLs, and add `understudy://auth-callback`.
 4. **Turn on email links.** Go to Authentication → Sign In / Providers → Email, and make sure it's enabled. The default Supabase mail server only sends a few emails an hour. That's fine for testing, but add your own SMTP before inviting testers.
 5. **Connect the app.** Go to Project Settings → API Keys and copy the **Project URL** and the **anon / publishable key** into `app/config.local.json`:
@@ -54,8 +54,8 @@ Keep the `.p8` file out of this repo. `.gitignore` blocks `*.p8` as a safety net
 1. Build and open the app:
    - `app/scripts/bundle.sh`
    - `open app/build/Understudy.app`
-2. Click the black pill around the notch, or press ⌥ Space. You should see the sign-in panel. Without a config file, it says "Not connected to a server yet".
-3. Try each method. After signing in, the panel shows your email, "Free plan · 0 of 5 skills used", and the sample skill.
+2. In the main window, open **Account** in the sidebar. Without a config file, it says sign-in isn't set up and the app stays in Sample mode.
+3. Try each method. After signing in, the Account page shows your email and "Free plan · 0 of 5 skills used", and Skills shows the sample skill.
 4. In Supabase, go to Table Editor → `skills`. You should see one row with your user ID and `is_sample = true`. That confirms row-level security and the sign-up trigger are working.
 
 ## What isn't set up yet

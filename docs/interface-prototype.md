@@ -1,12 +1,20 @@
-# Understudy: local interface prototype
+# Understudy: the app prototype
 
 This is a clickable native Mac app. It is not a working demonstration-learning engine.
+
+## One app, two surfaces (since 2026-09-23 evening)
+
+- **Main window** is the home: Home, Teach a skill, Skills, Receipts, and Account (sign-in).
+- **The notch** is the live companion, styled and animated like the landing page's hero demo. The pill has a glowing dot. It springs open into a strip with a label, a timer, and the last 4 steps: Watching (pulsing dot), New skill, Rehearsing (blue dot, read-only), and Receipt. It never asks for sign-in or typing.
+- **One data layer** (`SkillLibrary`): before sign-in it runs in **Sample mode**, saved on this Mac in the same JSON file as before, so old data carries over. After sign-in, skills and receipts come from the Supabase account. Receipts need `supabase/migrations/0002_receipt_details.sql`.
+- The shortcut (default Option-Space) follows the page's story: press it once to start Watch, and press it again to stop and open the review.
+- `open app/build/Understudy.app --args --notch-demo` plays the landing page's full sequence in the real notch, labeled "Concept demonstration".
 
 ## Open
 
 Build from the project root with `app/scripts/bundle.sh`, then open `app/build/Understudy.app`.
 
-The workspace opens at launch. Reopen it from the menu-bar icon with **Open workspace**, or choose **Open your workspace** in the notch panel. The configurable global shortcut (Option-Space by default) opens the notch. The workspace has a Dock entry, standard app menus, a native sidebar and toolbar, and follows the system appearance.
+The main window opens at launch. Reopen it from the menu-bar icon with **Open Understudy**, or click the notch. The configurable global shortcut (Option-Space by default) starts or stops the simulated Watch. The workspace has a Dock entry, standard app menus, a native sidebar and toolbar, and follows the system appearance.
 
 ## Try it
 
@@ -19,10 +27,10 @@ The workspace opens at launch. Reopen it from the menu-bar icon with **Open work
 5. Choose **Try another case**, select **Missing ad spend**, and rehearse again. Total spend and cost per lead remain missing. The report is an incomplete draft.
 6. Optionally export Markdown to a local location you select. The app reads the saved file back and compares its contents with the sample report.
 
-Watch is one shared session across the workspace and notch. Starting from either
-surface updates the other. Navigating away, closing the workspace, or opening the
+Watch is one shared session across the main window and the notch. Starting from either
+surface updates the other. Rehearsing plays in the notch (about 5 seconds), then opens the receipt. Navigating away, closing the workspace, or opening the
 teaching flow again does not restart it. Watch notes copy into sample review without
-duplicates. The notch's **Done** dismisses the demo; it does not save a skill.
+duplicates. Saving a skill shows "New skill" in the notch for a few seconds.
 
 Open shortcut settings with **Command-comma**, the toolbar gear, the notch gear,
 or the menu-bar menu. See `keyboard-shortcuts.md`.
@@ -42,7 +50,7 @@ or the menu-bar menu. See `keyboard-shortcuts.md`.
 - Sample figures are fictional. They are not read from Google Sheets or any connected app.
 - Receipts describe local sample behavior; they do not verify a client workflow.
 - No email, tracker, cloud execution, or background recording is implemented by this interface.
-- Existing Supabase sign-in code is retained. Its backend configuration and end-to-end behavior have not been verified in this continuation.
+- Supabase sign-in and account storage are written but unverified end to end: the Supabase project doesn't exist yet.
 
 The capture experiment and held-out evaluation data remain separate and unchanged.
 
@@ -51,7 +59,7 @@ The capture experiment and held-out evaluation data remain separate and unchange
 From `app/`, compile the isolated sample domain checks:
 
 ```sh
-swiftc Sources/Understudy/DemoDomain.swift Tests/PrototypeChecks.swift -o /tmp/understudy-prototype-checks
+swiftc Sources/Understudy/Library.swift Tests/PrototypeChecks.swift -o /tmp/understudy-prototype-checks
 /tmp/understudy-prototype-checks
 ```
 
@@ -60,11 +68,18 @@ These check missing-value propagation, simulation disclosure, and serialized rec
 ## Shared Watch checks
 
 ```sh
-swiftc app/Sources/Understudy/DemoDomain.swift app/Sources/Understudy/WatchSession.swift app/Sources/Understudy/WorkspaceState.swift app/Tests/WorkspaceChecks.swift -o /tmp/understudy-workspace-checks
+swiftc app/Sources/Understudy/Library.swift app/Sources/Understudy/WatchSession.swift app/Sources/Understudy/WorkspaceState.swift app/Tests/WorkspaceChecks.swift -o /tmp/understudy-workspace-checks
 /tmp/understudy-workspace-checks
 ```
 
-These check resuming without resetting progress, app navigation, stopping into
+Notch strip checks (states, row order, read-only rehearsal, missing-spend receipt):
+
+```sh
+swiftc -parse-as-library app/Sources/Understudy/{Library,WatchSession,WorkspaceState,NotchActivity}.swift app/Tests/NotchChecks.swift -o /tmp/understudy-notch-checks
+/tmp/understudy-notch-checks
+```
+
+The workspace checks cover resuming without resetting progress, app navigation, stopping into
 review, carrying an unsubmitted note forward, and preventing duplicate notes.
 
 ## Verification on 2026-09-23
