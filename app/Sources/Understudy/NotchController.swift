@@ -21,6 +21,7 @@ final class NotchState: ObservableObject {
 final class NotchController: NSObject, NSWindowDelegate {
     private let model: AppModel
     private let state = NotchState()
+    private let watch = WatchSession()
     private let panel: NotchPanel
     private var hosting: NSHostingView<NotchRootView>!
     private var bag = Set<AnyCancellable>()
@@ -56,7 +57,7 @@ final class NotchController: NSObject, NSWindowDelegate {
         panel.delegate = self
         panel.setAccessibilityLabel("Understudy")
 
-        let root = NotchRootView(model: model, state: state, notchSize: notchSize, hasNotch: hasNotch,
+        let root = NotchRootView(model: model, state: state, watch: watch, notchSize: notchSize, hasNotch: hasNotch,
                                  onToggle: { [weak self] in self?.toggle() },
                                  onClose: { [weak self] in self?.collapse() })
         hosting = NSHostingView(rootView: root)
@@ -64,6 +65,7 @@ final class NotchController: NSObject, NSWindowDelegate {
 
         // Re-fit the window whenever what's inside changes size (signed out ↔ signed in, messages).
         model.objectWillChange.merge(with: state.objectWillChange)
+            .merge(with: watch.$phase.map { _ in () }, watch.$rules.map { _ in () })
             .debounce(for: .milliseconds(30), scheduler: RunLoop.main)
             .sink { [weak self] _ in self?.fit(animated: true) }
             .store(in: &bag)
@@ -118,6 +120,7 @@ final class NotchController: NSObject, NSWindowDelegate {
 struct NotchRootView: View {
     @ObservedObject var model: AppModel
     @ObservedObject var state: NotchState
+    @ObservedObject var watch: WatchSession
     let notchSize: CGSize
     let hasNotch: Bool
     let onToggle: () -> Void
@@ -130,20 +133,19 @@ struct NotchRootView: View {
             if state.expanded {
                 VStack(spacing: 0) {
                     Color.clear.frame(height: hasNotch ? notchSize.height : 0)
-                    PanelView(model: model, onClose: onClose)
+                    PanelView(model: model, watch: watch, onClose: onClose)
                 }
             } else {
                 HStack {
                     Spacer()
-                    Circle().fill(Theme.ghostLight).frame(width: 7, height: 7)
-                        .shadow(color: Theme.ghostLight.opacity(0.85), radius: 5)
+                    WatchPulse(active: watch.isPlaying)
                 }
                 .padding(.trailing, 12)
                 .frame(height: notchSize.height)
                 .contentShape(Rectangle())
                 .onTapGesture(perform: onToggle)
                 .accessibilityElement()
-                .accessibilityLabel("Understudy")
+                .accessibilityLabel(watch.isPlaying ? "Understudy, simulated replay in progress" : "Understudy")
                 .accessibilityHint("Opens the Understudy panel")
                 .accessibilityAddTraits(.isButton)
                 .accessibilityAction(.default) { onToggle() }

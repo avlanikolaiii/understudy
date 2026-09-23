@@ -25,23 +25,37 @@ struct StatusTag: View {
 /// Everything that drops down from the notch (or the menu bar icon).
 struct PanelView: View {
     @ObservedObject var model: AppModel
+    @ObservedObject var watch: WatchSession
     var onClose: () -> Void = {}
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             header
-            switch model.phase {
-            case .notConfigured: NotConfiguredView()
-            case .loading: ProgressView().controlSize(.small).frame(maxWidth: .infinity, alignment: .center).padding(.vertical, 30)
-            case .signedOut: SignInView(model: model)
-            case .signedIn(let email): HomeView(model: model, email: email)
-            }
-            if let message = model.message {
-                Text(message)
-                    .font(.system(size: 12))
-                    .foregroundStyle(model.messageIsError ? Theme.warn : Theme.muted)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .accessibilityAddTraits(.updatesFrequently)
+            if watch.isPresented {
+                WatchView(session: watch)
+            } else {
+                Button { watch.start() } label: {
+                    HStack(spacing: 10) {
+                        Image(systemName: "record.circle")
+                        Text("Watch a new task").font(.system(size: 14, weight: .semibold))
+                        Spacer()
+                        StatusTag(text: "Simulated")
+                    }.padding(12).background(Theme.card, in: RoundedRectangle(cornerRadius: 8))
+                }.buttonStyle(.plain)
+                    .accessibilityHint("Starts a predefined local replay. No account or recording permission needed.")
+                switch model.phase {
+                case .notConfigured: NotConfiguredView()
+                case .loading: ProgressView().controlSize(.small).frame(maxWidth: .infinity, alignment: .center).padding(.vertical, 30)
+                case .signedOut: SignInView(model: model)
+                case .signedIn(let email): HomeView(model: model, email: email)
+                }
+                if let message = model.message {
+                    Text(message)
+                        .font(.system(size: 12))
+                        .foregroundStyle(model.messageIsError ? Theme.warn : Theme.muted)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityAddTraits(.updatesFrequently)
+                }
             }
         }
         .padding(.horizontal, 20)
@@ -62,7 +76,8 @@ struct PanelView: View {
             Button(action: onClose) { Image(systemName: "xmark").font(.system(size: 11, weight: .bold)) }
                 .buttonStyle(.plain).foregroundStyle(Theme.muted)
                 .keyboardShortcut(.cancelAction)
-                .accessibilityLabel("Close")
+                .accessibilityLabel("Collapse panel")
+                .help(watch.isPlaying ? "Hide panel; simulated replay continues" : "Hide panel")
         }
     }
 }
@@ -177,11 +192,10 @@ struct HomeView: View {
                     StatusTag(text: "Next build")
                 }
                 HStack(spacing: 8) {
-                    ActionTile(title: "Watch a new task", symbol: "record.circle")
                     ActionTile(title: "Rehearse", symbol: "theatermasks")
                     ActionTile(title: "Run now", symbol: "play.fill")
                 }
-                Text("These open in the next build. Watching and learning will be simulated there, and labeled as such.")
+                Text("Rehearsal and runs in this panel are planned for a later build.")
                     .font(.system(size: 11)).foregroundStyle(Theme.muted)
                     .fixedSize(horizontal: false, vertical: true)
             }
