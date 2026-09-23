@@ -3,32 +3,35 @@ import Combine
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
+    // One set of objects, shared by the main window and the notch.
     let model = AppModel()
+    private lazy var library = SkillLibrary(auth: model)
+    private let watch = WatchSession()
+    private lazy var activity = NotchActivity(watch: watch)
+    private let ui = WorkspaceState()
     private var notch: NotchController!
     private var statusItem: NSStatusItem!
     private let shortcuts = ShortcutManager()
     private var shortcutSettings: ShortcutSettingsController!
     private var shortcutObservation: AnyCancellable?
     private var workspace: WorkspaceController!
-    private let watch = WatchSession()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         shortcutSettings = ShortcutSettingsController(manager: shortcuts)
-        workspace = WorkspaceController(watch: watch, openSettings: { [weak self] in self?.shortcutSettings.show() })
-        model.openWorkspace = { [weak self] in self?.workspace.show() }
-        notch = NotchController(model: model, watch: watch)
-        model.openSettings = { [weak self] in self?.shortcutSettings.show() }
+        workspace = WorkspaceController(auth: model, library: library, ui: ui, watch: watch, activity: activity,
+                                        openSettings: { [weak self] in self?.shortcutSettings.show() })
+        notch = NotchController(activity: activity, onTap: { [weak self] page in self?.workspace.show(page) })
         installMainMenu()
 
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         statusItem.button?.image = NSImage(systemSymbolName: "theatermasks", accessibilityDescription: "Understudy")
         let menu = NSMenu()
-        let open = NSMenuItem(title: "Open Understudy", action: #selector(openPanel), keyEquivalent: "")
+        let open = NSMenuItem(title: "Open Understudy", action: #selector(openWorkspace), keyEquivalent: "o")
         open.target = self
         menu.addItem(open)
-        let workspaceItem = NSMenuItem(title: "Open workspace", action: #selector(openWorkspace), keyEquivalent: "o")
-        workspaceItem.target = self
-        menu.addItem(workspaceItem)
+        let watchItem = NSMenuItem(title: "Watch a Task (Simulated)", action: #selector(shortcutPressed), keyEquivalent: "")
+        watchItem.target = self
+        menu.addItem(watchItem)
         let settingsItem = NSMenuItem(title: "Keyboard Shortcut…", action: #selector(openSettings), keyEquivalent: ",")
         settingsItem.target = self
         menu.addItem(settingsItem)
@@ -36,17 +39,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(NSMenuItem(title: "Quit Understudy", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
         statusItem.menu = menu
 
-        shortcutObservation = shortcuts.objectWillChange.sink { [weak self, weak open] _ in
+        shortcutObservation = shortcuts.objectWillChange.sink { [weak self, weak watchItem] _ in
             DispatchQueue.main.async {
                 guard let self else { return }
                 let label = self.shortcuts.shortcut.display
                 self.model.shortcutLabel = self.shortcuts.isActive ? label : "Shortcut unavailable"
-                open?.title = self.shortcuts.isActive ? "Open Understudy (\(label))" : "Open Understudy (shortcut unavailable)"
+                watchItem?.title = self.shortcuts.isActive ? "Watch a Task (Simulated) · \(label)" : "Watch a Task (Simulated)"
             }
         }
-        shortcuts.start { [weak self] in self?.notch.toggle() }
+        shortcuts.start { [weak self] in self?.shortcutPressed() }
         model.start()
-        workspace.show()
+        if CommandLine.arguments.contains("--notch-demo") {
+            // Plays the landing page's hero sequence in the real notch, for side-by-side comparison.
+            activity.playDemo()
+        } else {
+            workspace.show()
+        }
     }
 
     private func installMainMenu() {
@@ -99,12 +107,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func openSettings() { shortcutSettings.show() }
 
-    @objc private func openPanel() { notch.expand() }
+    /// The landing page's story: the shortcut starts Watch, and pressing it again stops Watch
+    /// and opens the review in the main window.
+    @objc private func shortcutPressed() {
+        switch activity.mode {
+        case .watching:
+            ui.reviewWatch(watch)
+            workspace.show()
+        case .stopped:
+            workspace.show(.teach)
+        case .learned, .receipt:
+            activity.dismiss()
+        case .rehearsing:
+            workspace.show(.results)
+        case .idle, .demo:
+            ui.startWatch(watch)
+        }
+    }
 
     /// Email sign-in links and OAuth redirects arrive as understudy://auth-callback?...
     func application(_ application: NSApplication, open urls: [URL]) {
         for url in urls { model.handle(url: url) }
-        notch.expand()
+        workspace.show(.account)
     }
 }
 

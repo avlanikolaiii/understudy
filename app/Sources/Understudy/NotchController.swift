@@ -2,37 +2,40 @@ import AppKit
 import Combine
 import SwiftUI
 
-/// Borderless panel that sits over the MacBook notch. It can become key (so the
-/// email field can take typing) without activating the app or stealing the menu bar.
+/// Borderless panel over the MacBook notch. It never takes keyboard focus; typing
+/// happens in the main window.
 final class NotchPanel: NSPanel {
-    override var canBecomeKey: Bool { true }
+    override var canBecomeKey: Bool { false }
     override var canBecomeMain: Bool { false }
 }
 
-@MainActor
-final class NotchState: ObservableObject {
-    @Published var expanded = false
-    @Published var hovering = false
+/// The first click on the non-activating panel should act, not just focus it.
+final class NotchHostingView<Content: View>: NSHostingView<Content> {
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 }
 
-/// Places Understudy in the notch. On Macs without a notch, the same panel drops
-/// down from the top center of the screen, below the menu bar.
+/// Places Understudy in the notch. On Macs without a notch, the strip drops down from
+/// the top center of the screen, below the menu bar, only while something is happening.
+///
+/// The window itself never animates. It grows at once to fit the strip, SwiftUI springs
+/// the black shape open inside it, and the window shrinks back only after the shape has
+/// finished closing, so clicks outside the shape reach the apps underneath.
 @MainActor
-final class NotchController: NSObject, NSWindowDelegate {
-    private let model: AppModel
+final class NotchController: NSObject {
+    private let activity: NotchActivity
     private let state = NotchState()
-    private let watch: WatchSession
     private let panel: NotchPanel
-    private var hosting: NSHostingView<NotchRootView>!
+    private var hosting: NotchHostingView<NotchLiveView>!
     private var bag = Set<AnyCancellable>()
+    private var shrinkWork: DispatchWorkItem?
+    private var hideWork: DispatchWorkItem?
 
     private let screen: NSScreen
     let hasNotch: Bool
     private let notchSize: CGSize
 
-    init(model: AppModel, watch: WatchSession) {
-        self.model = model
-        self.watch = watch
+    init(activity: NotchActivity, onTap: @escaping (PrototypePage) -> Void) {
+        self.activity = activity
         let screens = NSScreen.screens
         let notched = screens.first { $0.safeAreaInsets.top > 0 }
         screen = notched ?? NSScreen.main ?? screens[0]
@@ -42,8 +45,7 @@ final class NotchController: NSObject, NSWindowDelegate {
             let right = s.auxiliaryTopRightArea?.width ?? 0
             notchSize = CGSize(width: max(s.frame.width - left - right, 120), height: s.safeAreaInsets.top)
         } else {
-            let menuBar = screen.frame.maxY - screen.visibleFrame.maxY
-            notchSize = CGSize(width: 0, height: max(menuBar, 24))
+            notchSize = CGSize(width: 0, height: 30)
         }
         panel = NotchPanel(contentRect: .zero, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
         super.init()
@@ -55,113 +57,77 @@ final class NotchController: NSObject, NSWindowDelegate {
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary, .ignoresCycle]
         panel.isMovable = false
         panel.hidesOnDeactivate = false
-        panel.delegate = self
         panel.setAccessibilityLabel("Understudy")
 
-        let root = NotchRootView(model: model, state: state, watch: watch, notchSize: notchSize, hasNotch: hasNotch,
-                                 onToggle: { [weak self] in self?.toggle() },
-                                 onClose: { [weak self] in self?.collapse() })
-        hosting = NSHostingView(rootView: root)
+        let root = NotchLiveView(activity: activity, state: state, notchSize: notchSize, hasNotch: hasNotch,
+                                 onTap: { [weak activity] in
+                                     guard let activity else { return }
+                                     let page = activity.page
+                                     activity.dismiss()
+                                     onTap(page)
+                                 })
+        hosting = NotchHostingView(rootView: root)
         panel.contentView = hosting
 
-        // Re-fit the window whenever what's inside changes size (signed out ↔ signed in, messages).
-        model.objectWillChange.merge(with: state.objectWillChange)
-            .merge(with: watch.$phase.map { _ in () }, watch.$rules.map { _ in () })
-            .debounce(for: .milliseconds(30), scheduler: RunLoop.main)
-            .sink { [weak self] _ in self?.fit(animated: true) }
+        activity.$mode.removeDuplicates().receive(on: RunLoop.main)
+            .sink { [weak self] mode in self?.modeChanged(mode) }
+            .store(in: &bag)
+        // Re-fit whenever what's inside changes size (rows arriving, hover).
+        activity.objectWillChange.merge(with: state.objectWillChange)
+            .debounce(for: .milliseconds(15), scheduler: RunLoop.main)
+            .sink { [weak self] _ in self?.fit() }
             .store(in: &bag)
 
-        fit(animated: false)
+        fit()
         if hasNotch { panel.orderFrontRegardless() }
     }
 
-    // MARK: Open and close
+    private var reduceMotion: Bool { NSWorkspace.shared.accessibilityDisplayShouldReduceMotion }
 
-    func toggle() {
-        // The teaching interaction uses the configured shortcut (or the collapsed notch)
-        // to stop watching and leave the captured sample available for inspection.
-        if watch.isPlaying {
-            watch.stop()
-            expand()
-        } else {
-            state.expanded ? collapse() : expand()
+    private func modeChanged(_ mode: NotchActivity.Mode) {
+        hideWork?.cancel()
+        setExpanded(mode != .idle)
+        if mode == .stopped {
+            // A stopped Watch waits in the main window. Tuck the strip away after a moment.
+            let work = DispatchWorkItem { [weak self] in self?.setExpanded(false) }
+            hideWork = work
+            DispatchQueue.main.asyncAfter(deadline: .now() + 6, execute: work)
         }
     }
 
-    func expand() {
-        guard !state.expanded else { panel.makeKey(); return }
-        state.expanded = true
-        fit(animated: true)
-        panel.orderFrontRegardless()
-        panel.makeKey()
-    }
-
-    func collapse() {
-        guard state.expanded else { return }
-        state.expanded = false
-        fit(animated: true)
-        if !hasNotch { panel.orderOut(nil) }
-    }
-
-    func windowDidResignKey(_ notification: Notification) {
-        // Clicking elsewhere closes the panel, except while a sign-in sheet is open.
-        if !model.busy { collapse() }
+    private func setExpanded(_ open: Bool) {
+        guard state.expanded != open else { return }
+        if open && !hasNotch { panel.orderFrontRegardless() }
+        withAnimation(reduceMotion ? nil : NotchStyle.spring) { state.expanded = open }
+        fit()
     }
 
     // MARK: Geometry
 
-    private func fit(animated: Bool) {
-        let size: CGSize
-        if state.expanded {
-            let fitted = hosting.fittingSize
-            size = CGSize(width: max(fitted.width, 420), height: fitted.height)
-        } else {
-            let wing: CGFloat = state.hovering ? 44 : 30
-            size = CGSize(width: notchSize.width + wing * 2, height: notchSize.height)
+    private func fit() {
+        hosting.layoutSubtreeIfNeeded()
+        let target = hosting.fittingSize
+        let current = panel.frame.size
+        shrinkWork?.cancel()
+        if target.width >= current.width && target.height >= current.height {
+            place(target)
+            return
         }
-        let top = hasNotch ? screen.frame.maxY : screen.visibleFrame.maxY
-        let frame = NSRect(x: screen.frame.midX - size.width / 2, y: top - size.height, width: size.width, height: size.height)
-        panel.setFrame(frame, display: true, animate: animated && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion)
+        // Grow now in whichever direction grows; shrink once the close animation is done.
+        place(CGSize(width: max(target.width, current.width), height: max(target.height, current.height)))
+        let work = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            self.place(self.hosting.fittingSize)
+            if !self.hasNotch && !self.state.expanded { self.panel.orderOut(nil) }
+        }
+        shrinkWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + (reduceMotion ? 0 : 0.6), execute: work)
     }
-}
 
-/// The SwiftUI content of the notch window: a black shape that is a small pill when
-/// collapsed and the full panel when expanded.
-struct NotchRootView: View {
-    @ObservedObject var model: AppModel
-    @ObservedObject var state: NotchState
-    @ObservedObject var watch: WatchSession
-    let notchSize: CGSize
-    let hasNotch: Bool
-    let onToggle: () -> Void
-    let onClose: () -> Void
-
-    var body: some View {
-        ZStack(alignment: .top) {
-            UnevenRoundedRectangle(bottomLeadingRadius: state.expanded ? 22 : 12, bottomTrailingRadius: state.expanded ? 22 : 12)
-                .fill(Color.black)
-            if state.expanded {
-                VStack(spacing: 0) {
-                    Color.clear.frame(height: hasNotch ? notchSize.height : 0)
-                    PanelView(model: model, watch: watch, onClose: onClose)
-                }
-            } else {
-                HStack {
-                    Spacer()
-                    WatchPulse(active: watch.isPlaying)
-                }
-                .padding(.trailing, 12)
-                .frame(height: notchSize.height)
-                .contentShape(Rectangle())
-                .onTapGesture(perform: onToggle)
-                .accessibilityElement()
-                .accessibilityLabel(watch.isPlaying ? "Understudy, simulated replay in progress" : "Understudy")
-                .accessibilityHint("Opens the Understudy panel")
-                .accessibilityAddTraits(.isButton)
-                .accessibilityAction(.default) { onToggle() }
-            }
-        }
-        .fixedSize(horizontal: false, vertical: state.expanded)
-        .onHover { state.hovering = $0 }
+    private func place(_ size: CGSize) {
+        let top = hasNotch ? screen.frame.maxY : screen.visibleFrame.maxY
+        let frame = NSRect(x: (screen.frame.midX - size.width / 2).rounded(), y: top - size.height,
+                           width: size.width.rounded(.up), height: size.height.rounded(.up))
+        if frame != panel.frame { panel.setFrame(frame, display: true, animate: false) }
     }
 }

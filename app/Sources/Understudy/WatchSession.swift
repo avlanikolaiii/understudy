@@ -9,15 +9,18 @@ final class WatchSession: ObservableObject {
         let id: Int
         let title: String
         let detail: String
+        /// Short app name and past-tense note, for the notch strip.
+        let app: String
+        let noted: String
     }
 
     static let secondsPerStep = 5
     static let steps = [
-        Step(id: 0, title: "Open the campaign sheet", detail: "Numbers · teaching sample · week 1"),
-        Step(id: 1, title: "Open the weekly report template", detail: "TextEdit · local report copy"),
-        Step(id: 2, title: "Select the week's campaign figures", detail: "Impressions, clicks, spend, and leads"),
-        Step(id: 3, title: "Fill the report's numbers table", detail: "Week 1 totals from the teaching example"),
-        Step(id: 4, title: "Write the weekly summary", detail: "One sentence in the sample report")
+        Step(id: 0, title: "Open the campaign sheet", detail: "Numbers · teaching sample · week 1", app: "Numbers", noted: "opened the campaign sheet"),
+        Step(id: 1, title: "Open the weekly report template", detail: "TextEdit · local report copy", app: "TextEdit", noted: "opened the report template"),
+        Step(id: 2, title: "Select the week's campaign figures", detail: "Impressions, clicks, spend, and leads", app: "Numbers", noted: "copied week 1 figures"),
+        Step(id: 3, title: "Fill the report's numbers table", detail: "Week 1 totals from the teaching example", app: "TextEdit", noted: "filled the numbers table"),
+        Step(id: 4, title: "Write the weekly summary", detail: "One sentence in the sample report", app: "TextEdit", noted: "wrote the summary")
     ]
 
     @Published private(set) var phase: Phase = .idle

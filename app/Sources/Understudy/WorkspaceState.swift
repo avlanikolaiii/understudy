@@ -2,9 +2,13 @@ import Combine
 import Foundation
 
 enum PrototypePage: String, CaseIterable {
-    case home = "Home", teach = "Teach a skill", skills = "My skills", results = "Run results"
+    case home = "Home", teach = "Teach a skill", skills = "Skills", results = "Receipts", account = "Account"
+    static let workspace: [PrototypePage] = [.home, .teach, .skills, .results]
     var symbol: String {
-        switch self { case .home: "square.grid.2x2"; case .teach: "plus.circle"; case .skills: "square.stack.3d.up"; case .results: "checkmark.rectangle" }
+        switch self {
+        case .home: "square.grid.2x2"; case .teach: "plus.circle"; case .skills: "square.stack.3d.up"
+        case .results: "checkmark.rectangle"; case .account: "person.crop.circle"
+        }
     }
 }
 
@@ -15,9 +19,9 @@ final class WorkspaceState: ObservableObject {
     @Published var teachingStep = 0
     @Published var skillName = "Weekly client update"
     @Published var clientName = "Norte Studio"
-    @Published var rules = DemoSkill.sample.rules
-    @Published var selectedSkill: DemoSkill?
-    @Published var scenario: DemoScenario = .complete
+    @Published var rules = Skill.sample.rules
+    @Published var selectedSkill: Skill?
+    @Published var scenario: SampleCase = .complete
     @Published var selectedReceipt: UUID?
 
     func showTeaching(watch: WatchSession) {

@@ -3,31 +3,7 @@ import AuthenticationServices
 import Foundation
 import Supabase
 
-/// A skill as stored in the `skills` table (see supabase/migrations).
-struct SkillRow: Decodable, Identifiable {
-    let id: UUID
-    let name: String
-    let client: String?
-    let isSample: Bool
-
-    enum CodingKeys: String, CodingKey {
-        case id, name, client
-        case isSample = "is_sample"
-    }
-}
-
-private struct NewSkill: Encodable {
-    let name: String
-    let client: String
-    let is_sample: Bool
-}
-
-private struct ProfileRow: Decodable {
-    let plan: String
-}
-
-/// Sign-in state and the signed-in user's data. Everything here is real:
-/// Supabase Auth for sign-in, and the database (behind row-level security) for skills.
+/// Sign-in state. Everything here is real Supabase Auth. Skills and receipts live in `SkillLibrary`.
 @MainActor
 final class AppModel: ObservableObject {
     enum Phase: Equatable {
@@ -38,17 +14,11 @@ final class AppModel: ObservableObject {
     }
 
     @Published private(set) var phase: Phase = .loading
-    @Published private(set) var skills: [SkillRow] = []
-    @Published private(set) var plan = "free"
     @Published var message: String?
     @Published var messageIsError = false
     @Published private(set) var busy = false
     @Published var emailDraft = ""
-
     @Published var shortcutLabel = "⌥ Space"
-    var openSettings: (() -> Void)?
-
-    var openWorkspace: (() -> Void)?
 
     let client: SupabaseClient?
 
@@ -74,10 +44,8 @@ final class AppModel: ObservableObject {
                 guard let self else { return }
                 if let session, !session.isExpired {
                     self.phase = .signedIn(email: session.user.email ?? "your account")
-                    await self.loadAccount()
                 } else {
                     self.phase = .signedOut
-                    self.skills = []
                 }
             }
         }
@@ -120,31 +88,6 @@ final class AppModel: ObservableObject {
         run("Signing out…") {
             try await client.auth.signOut()
             self.say(nil)
-        }
-    }
-
-    // MARK: Account data
-
-    var skillCountText: String {
-        let owned = skills.filter { !$0.isSample }.count   // the sample skill doesn't count toward the limit
-        return plan == "free" ? "\(owned) of \(AppConfig.freeSkillLimit) skills used" : "\(owned) skills"
-    }
-
-    private func loadAccount() async {
-        guard let client else { return }
-        do {
-            if let profile: ProfileRow = try? await client.from("profiles").select("plan").single().execute().value {
-                plan = profile.plan
-            }
-            var rows: [SkillRow] = try await client.from("skills").select("id,name,client,is_sample").order("created_at").execute().value
-            if rows.isEmpty {
-                // First sign-in: add the sample skill so the account isn't empty. It's marked as a sample.
-                try await client.from("skills").insert(NewSkill(name: "Weekly client update", client: "Norte Studio", is_sample: true)).execute()
-                rows = try await client.from("skills").select("id,name,client,is_sample").order("created_at").execute().value
-            }
-            skills = rows
-        } catch {
-            say("Signed in, but your skills couldn't load: \(error.localizedDescription)", error: true)
         }
     }
 

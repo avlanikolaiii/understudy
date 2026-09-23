@@ -1,29 +1,39 @@
 import SwiftUI
 
-struct PrototypeView: View {
-    @ObservedObject var store: PrototypeStore
+/// The one main window: teaching, skills, receipts, and the account. The notch is its live companion.
+struct MainWindowView: View {
+    @ObservedObject var auth: AppModel
+    @ObservedObject var library: SkillLibrary
     @ObservedObject var ui: WorkspaceState
     @ObservedObject var watch: WatchSession
+    @ObservedObject var activity: NotchActivity
     var openSettings: () -> Void = {}
 
-    private var activeSkill: DemoSkill { ui.selectedSkill ?? store.skills.first ?? .sample }
-    private var receipt: DemoReceipt? {
-        store.receipts.first(where: { $0.id == ui.selectedReceipt }) ?? store.receipts.first
+    private var activeSkill: Skill {
+        library.skills.first(where: { $0.id == ui.selectedSkill?.id }) ?? library.skills.first ?? .sample
+    }
+    private var receipt: Receipt? {
+        library.receipts.first(where: { $0.id == ui.selectedReceipt }) ?? library.receipts.first
     }
 
     var body: some View {
         NavigationSplitView {
             List(selection: $ui.page) {
                 Section("Workspace") {
-                    ForEach(PrototypePage.allCases, id: \.self) { item in
+                    ForEach(PrototypePage.workspace, id: \.self) { item in
                         Label(item.rawValue, systemImage: item.symbol).tag(item)
                     }
+                }
+                Section("Account") {
+                    Label(library.mode == .sample ? "Sample mode" : "Your account", systemImage: PrototypePage.account.symbol)
+                        .tag(PrototypePage.account)
                 }
             }
             .listStyle(.sidebar)
             .navigationSplitViewColumnWidth(min: 170, ideal: 200, max: 270)
             .safeAreaInset(edge: .bottom) {
-                Label("Simulated prototype", systemImage: "info.circle")
+                Label(library.mode == .sample ? "Saved on this Mac" : "Saved to your account",
+                      systemImage: library.mode == .sample ? "internaldrive" : "person.crop.circle.badge.checkmark")
                     .font(.caption).foregroundStyle(.secondary).padding(16)
             }
         } detail: {
@@ -35,18 +45,19 @@ struct PrototypeView: View {
                         case .teach: teach
                         case .skills: skills
                         case .results: results
+                        case .account: AccountView(auth: auth, library: library)
                         }
                     }
                     .padding(28)
                     .frame(maxWidth: 820, alignment: .leading)
                     .frame(maxWidth: .infinity, alignment: .topLeading)
                 }
-                if let notice = store.notice {
+                if let notice = library.notice {
                     Divider()
                     HStack {
                         Text(notice).font(.callout).textSelection(.enabled)
                         Spacer()
-                        Button("Dismiss") { store.notice = nil }
+                        Button("Dismiss") { library.notice = nil }
                     }.padding(12)
                 }
             }
@@ -83,9 +94,9 @@ struct PrototypeView: View {
                 .background(Color.accentColor.opacity(0.055), in: RoundedRectangle(cornerRadius: 16))
                 .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.accentColor.opacity(0.25)))
             HStack(spacing: 14) {
-                stat("\(store.skills.count)", "Local sample skills", "square.stack.3d.up")
-                stat("\(store.receipts.count)", "Rehearsals explored", "theatermasks")
-                stat("0", "Connected accounts", "link")
+                stat("\(library.skills.count)", library.mode == .sample ? "Skills on this Mac" : "Skills in your account", "square.stack.3d.up")
+                stat("\(library.receipts.count)", "Rehearsal receipts", "theatermasks")
+                stat("0", "Connected apps", "link")
             }
             Text("A handoff you can inspect").font(.system(size: 17, weight: .semibold))
             step("1", "Show your process", "Explore a sample demonstration and save your workflow notes.")
@@ -128,8 +139,9 @@ struct PrototypeView: View {
                 HStack {
                     Button("Back") { ui.teachingStep = 1 }
                     primary("Save sample skill", symbol: "checkmark") {
-                        let skill = DemoSkill(name: ui.skillName.trimmingCharacters(in: .whitespacesAndNewlines), client: ui.clientName.trimmingCharacters(in: .whitespacesAndNewlines), rules: ui.rules)
-                        store.save(skill); ui.selectedSkill = skill; watch.dismiss(); ui.teachingStep = 0; ui.page = .skills
+                        let skill = Skill(name: ui.skillName.trimmingCharacters(in: .whitespacesAndNewlines), client: ui.clientName.trimmingCharacters(in: .whitespacesAndNewlines), rules: ui.rules)
+                        library.save(skill) { saved in ui.selectedSkill = saved; activity.showLearned(saved) }
+                        watch.dismiss(); ui.teachingStep = 0; ui.page = .skills
                     }
                     .disabled(ui.skillName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || ui.clientName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
@@ -139,8 +151,8 @@ struct PrototypeView: View {
 
     private var skills: some View {
         VStack(alignment: .leading, spacing: 22) {
-            title("Your skills", "Reusable sample routines, saved on this Mac.")
-            ForEach(store.skills) { skill in
+            title("Your skills", library.mode == .sample ? "Sample mode: saved on this Mac. Sign in to keep them in your account." : "Saved to your account.")
+            ForEach(library.skills) { skill in
                 Button { ui.selectedSkill = skill } label: {
                     HStack(spacing: 14) {
                         Image(systemName: "doc.text").font(.system(size: 22)).foregroundStyle(Color.accentColor)
@@ -148,7 +160,7 @@ struct PrototypeView: View {
                             Text(skill.name).font(.system(size: 15, weight: .semibold))
                             Text(skill.client).font(.system(size: 12)).foregroundStyle(Color.secondary)
                         }
-                        Spacer(); Text("Sample").font(.caption).foregroundStyle(.secondary)
+                        Spacer(); Text(skill.isSample ? "Sample" : "Simulated").font(.caption).foregroundStyle(.secondary)
                         if activeSkill.id == skill.id { Image(systemName: "checkmark.circle.fill").foregroundStyle(Color.accentColor) }
                     }.padding(18).background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 12))
                         .overlay(RoundedRectangle(cornerRadius: 12).stroke(activeSkill.id == skill.id ? Color.accentColor.opacity(0.6) : Color(nsColor: .separatorColor)))
@@ -157,25 +169,34 @@ struct PrototypeView: View {
             }
             Divider()
             Text("Rehearse \(activeSkill.name)").font(.system(size: 20, weight: .semibold))
-            Text("Explore a fixed sample result. This does not test AI learning or connect to your accounts.")
+            Text("Watch it rehearse in the notch. It uses fixed sample inputs, doesn't test AI learning, and doesn't connect to your accounts.")
                 .font(.system(size: 13)).foregroundStyle(Color.secondary)
             Picker("Sample inputs", selection: $ui.scenario) {
-                ForEach(DemoScenario.allCases) { Text($0.rawValue).tag($0) }
+                ForEach(SampleCase.allCases) { Text($0.rawValue).tag($0) }
             }.pickerStyle(.segmented)
             detail("WHAT CHANGES", ui.scenario == .complete ? "All sample figures are present. The report is ready for your review." : "Video spend is absent. Total spend and cost per lead stay missing; sharing is blocked.")
-            primary("Rehearse sample", symbol: "play.fill") {
-                ui.selectedReceipt = store.rehearse(activeSkill, scenario: ui.scenario).id; ui.page = .results
+            HStack(spacing: 12) {
+                primary("Rehearse sample", symbol: "play.fill") {
+                    let skill = activeSkill
+                    activity.rehearse(skill, scenario: ui.scenario, record: { library.record($0, skill: skill) }) { receipt in
+                        ui.selectedReceipt = receipt.id; ui.page = .results
+                    }
+                }.disabled(activity.isRehearsing)
+                if activity.isRehearsing {
+                    ProgressView().controlSize(.small)
+                    Text("Rehearsing in the notch (read-only)…").font(.callout).foregroundStyle(.secondary)
+                }
             }
         }
     }
 
     private var results: some View {
         VStack(alignment: .leading, spacing: 22) {
-            title("Run results", "What happened, what was checked, and what still needs you.")
+            title("Receipts", "What happened, what was checked, and what still needs you.")
             if let receipt {
-                if store.receipts.count > 1 {
+                if library.receipts.count > 1 {
                     Picker("Rehearsal", selection: Binding(get: { receipt.id }, set: { ui.selectedReceipt = $0 })) {
-                        ForEach(store.receipts) { item in Text("\(item.client) · \(item.status) · \(item.date.formatted(date: .omitted, time: .standard))").tag(item.id) }
+                        ForEach(library.receipts) { item in Text("\(item.client) · \(item.status) · \(item.date.formatted(date: .omitted, time: .standard))").tag(item.id) }
                     }
                 }
                 HStack(alignment: .top) {
@@ -198,7 +219,7 @@ struct PrototypeView: View {
                         .frame(maxWidth: .infinity, alignment: .leading).padding(.vertical, 12)
                 }.padding(16).background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 10))
                 HStack {
-                    primary("Export sample Markdown", symbol: "square.and.arrow.up") { store.export(receipt) }
+                    primary("Export sample Markdown", symbol: "square.and.arrow.up") { library.export(receipt) }
                     Button("Try another case") { ui.page = .skills }.buttonStyle(.bordered)
                 }
                 Text("Export writes only to the local location you choose. An incomplete report remains labeled as a draft.")
