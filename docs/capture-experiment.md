@@ -14,7 +14,7 @@ If any of these can't be captured, we write down exactly what's missing before c
 
 | Phase | Setup | Status |
 |---|---|---|
-| A · Native baseline | Teaching CSV in Numbers, report typed in TextEdit | Ready to run once Accessibility access is granted |
+| A · Native baseline | Teaching CSV in Numbers, report typed in TextEdit | Partly run (see results log) |
 | B · Google Sheets in a browser | A dedicated test spreadsheet in Chrome and Safari | Waiting: needs approval to create the test spreadsheet |
 | C · Sheets with screen-reader support on | Same as B, with Google Sheets' own accessibility setting turned on | After B |
 
@@ -53,4 +53,26 @@ Google Sheets draws much of its grid itself instead of as standard page elements
 
 ## Results log
 
-_No runs yet._
+### 2026-09-23 · Phase A, runs 1–2 (interim)
+
+**Setup.** The recorder was run from the Claude app's Terminal panel, which has Accessibility access. The demonstration was scripted with AppleScript, not done by hand: it selected week-1 ranges in Numbers (D5:D7, E5:E7, F5:F7, G5:G7, then F6) and wrote the week-1 report into `runs/demo-week-01.md` in TextEdit. The apps were in the background (not frontmost). A scripted demonstration is a stand-in for a human one. It changes the same app state, but it doesn't click or type.
+
+**What we learned**
+
+1. **The recorder's main path failed.** The system-wide "focused application" query returned `cannotComplete` even though the process was trusted. Run 1 logged only `focus: none`. Fix: fall back to the frontmost regular app, or watch named apps directly (`record-apps`).
+2. **TextEdit: fully captured.** Document name, full text after each edit, and caret position (item 5, and item 1 for this app).
+3. **Numbers, first look: grid not exposed.** The focused element was a generic scroll area whose only children were scrollbars. Cell selections produced no change. Numbers' status bar did show the selected cell's *value* (`793.32` = F6) but not its address.
+4. **Screen-reader mode is unsupported.** Setting `AXEnhancedUserInterface` on Numbers returned `notImplemented`.
+5. **Numbers, later look: grid exposed.** A later tree dump showed an `AXLayoutArea` containing an `AXTable` ("campaign_data, 13 rows, 7 columns") with every row and column (column descriptions = header names) and `selectedCells=1`. Numbers appears to build its accessibility tree lazily once a client starts asking. This needs confirming: what triggers it, and does it survive relaunching Numbers?
+
+**Scoring so far (phase A)**
+
+| Item | Status | Evidence |
+|---|---|---|
+| 1 · App and document | Captured | `app`, `window` = `campaign_data` / `demo-week-01.md` |
+| 2 · Sheet tab | Partly | "Sheet 1" appears in the tree; not yet tied to the selection |
+| 3 · Selected cell address | Not yet shown | Table exposes `selectedCells`. The recorder now reads cell addresses from row and column indexes, but that isn't verified yet (run 3) |
+| 4 · Cell values | Partly | Selected value via the status bar (`793.32`) |
+| 5 · Typed text and where | Captured | TextEdit value and caret range after each edit |
+
+**Next:** run 3 with the table-selection reader. Then repeat with Numbers freshly relaunched, to test whether the grid is exposed from the start or only after it's first queried. Then do phase B (Google Sheets), which needs a test spreadsheet.
