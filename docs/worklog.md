@@ -2,7 +2,7 @@
 
 Both agents work in this repo. Read this file and `git status` before starting.
 
-**Now working:** Claude Code, since 2026-09-23 18:25. The work: merging the two app surfaces and restyling the notch to match the landing page. Please don't edit `app/` until this line says "nobody".
+**Now working:** nobody. Claim this line before you edit anything.
 
 ---
 
@@ -37,3 +37,26 @@ Entries are append-only, newest last. Use this format:
 - commits: 787266e, 6c6a755, 4a7f296, baddea5
 - verified: the release build, signature, and plist; the Watch, workspace, shortcut, and prototype checks; launching Watch from the app; note entry; settings.
 - not verified: end-to-end notch and global-shortcut interaction; dark mode; the no-notch fallback.
+
+## 2026-09-23 18:25 → 19:10 · Claude Code · One app, a landing-page notch, and a shared brain
+- commits: d199722 (Codex's leftover README/bundle.sh, saved as-is), 1f9e52b (the merge), b21659a (AGENTS/CLAUDE/worklog/docs), and the latest fix commit (Codex review fixes)
+- what:
+  - The main window is the one home, with a new Account page.
+  - The notch is the landing page's live strip.
+  - SkillLibrary: Sample mode before sign-in, the Supabase account after.
+  - Migration 0002.
+  - `--notch-demo`.
+- verified:
+  - The release bundle builds and its signature verifies.
+  - Prototype, Workspace, Watch, Notch (new), and Shortcut checks all pass.
+  - `--notch-demo` screenshots of the real notch window match the page's Watching, Rehearsing, Running, and Receipt states.
+  - A window probe showed a 268×38 pill over the 208×38 notch, growing row by row (69→141 px) and shrinking back 0.6 s after closing.
+  - The idle pill was screenshotted.
+- reviewed: `codex exec review --commit 1f9e52b` found 2 P1 (account load and rehearsal owner races) and 2 P2 (account rehearsal before load; shortcut under an overlay). All four are fixed.
+- not verified:
+  - The main window visually (screen capture failed for it).
+  - The shortcut and clicks end to end.
+  - Reduce Motion.
+  - The no-notch fallback.
+  - Every signed-in flow, because Supabase isn't set up.
+- next: the human sets up Supabase (docs/setup/accounts.md, including migration 0002). Then the approved Skill review slice (editable rules saved to `skills.definition`).
