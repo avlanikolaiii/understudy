@@ -2,7 +2,11 @@
 
 Both agents work in this repo. Read this file and `git status` before starting.
 
-**Now working:** nobody. Claim this line before you edit anything.
+**Now working (split, since 2026-09-23 19:20):**
+- **Claude Code:** the Supabase setup. Files: `supabase/`, `docs/setup/`, `app/config.local.json`, `AppModel.swift`, `SkillLibrary.swift`, `AccountView.swift`, `Config.swift`, `scripts/bundle.sh`.
+- **Codex (`codex exec`, started by Claude at the human's request):** the report engine. Files: new `app/Sources/Understudy/ReportEngine.swift`, `app/Tests/ReportChecks.swift`, `docs/report-engine.md` only.
+
+Don't edit the other agent's files until its line is released.
 
 ---
 
