@@ -10,6 +10,7 @@ out/
 .env.*
 *.pem
 *.p12
+*.p8
 credentials*.json
 token*.json
 
@@ -21,3 +22,8 @@ client-examples/
 tools/ax-capture/ax-capture
 *.dmg
 .DS_Store
+
+# App build products and local config
+app/.build/
+app/build/
+app/config.local.json
