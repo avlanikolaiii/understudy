@@ -1,21 +1,104 @@
 # Understudy
 
-A Mac companion that learns a recurring task from one demonstration, rehearses it on examples it hasn't seen, and reports what it did and how it checked.
+**Show it once. Then hand it off.**
 
-**Status: clickable native Mac interface prototype.** One app: a main window (teach, skills, receipts, account) and a live notch strip styled after the landing page. It runs in Sample mode on this Mac until you sign in. It includes guided sample teaching, two rehearsal scenarios, receipts, and Markdown export. Recording, AI learning, and connected execution are not implemented by this interface. See [the interface guide](docs/app/interface-prototype.md) for build and usage instructions. The separate capture experiment remains on hold.
+Understudy is a Mac companion that lives in the MacBook notch. You do a recurring task once while it watches. It turns the demonstration into a **skill**, proves it learned by **rehearsing** on past examples it hasn't seen (read-only, so nothing live changes), and then runs the task for you. Every run ends with a **receipt** that keeps what it did (status) separate from how it checked (evidence).
 
-| Path | What's there |
+Understudy is its own runtime. It runs each step through connectors to your apps and calls an AI model only for the steps that need judgment. It is not a plug-in or a skill exporter for another AI app.
+
+The first workflow is the **weekly client update** for agencies and consultancies: campaign figures from a sheet → a report in your template → a tracker row → a client email waiting for your approval.
+
+## Status
+
+In development, not yet available to users.
+
+| Area | State |
 |---|---|
-| `apps/mac/` | Native SwiftUI app: main window, notch strip, Sample mode + Supabase account |
-| `AGENTS.md`, `CLAUDE.md`, `docs/worklog.md` | Shared rules and work log for Codex and Claude Code |
-| `docs/app/interface-prototype.md` | What works, what is simulated, and how to try it |
-| `docs/product/prototype-1.md` | Approved scope, proposed pass/fail criteria, milestones |
-| `docs/product/report-spec.md` | Exact formulas, rounding, and the missing-data rule |
-| `docs/research/capture-experiment.md` | M1: can a demonstration be captured? Protocol and results |
-| `docs/research/validation/` | Customer-interview kit in English and Spanish (nothing sent yet) |
-| `data/templates/weekly-update.md` | The fixed report template |
-| `data/fixtures/teaching/` | Synthetic teaching data. Readable during development |
-| `data/evaluation/holdout/` | Held-out weeks for testing only. **Don't open during development** |
-| `tools/ax-capture/` | The capture experiment recorder |
+| Mac app | Clickable prototype: main window, a live notch strip, accounts, and Sample mode. Watching, learning, and rehearsal are **simulated**. |
+| Report engine | Real `Decimal` math that follows the report spec and matches the sample weeks exactly. Not wired into the app yet. |
+| Accounts | Supabase project live, with email sign-in. Google and Apple sign-in are not configured yet. |
+| Website | Pre-launch site with an early-access waitlist, deployed on Vercel. |
+| Capture and learning | Research phase; the capture experiment is paused. |
 
-Never commit client examples, credentials, or generated reports. `.gitignore` covers `client-examples/`, `runs/`, `out/`, and token files.
+Capabilities are only described as working once they can be demonstrated in the real app.
+
+## Repository layout
+
+```
+understudy/
+├── apps/
+│   ├── mac/                 Native macOS app (SwiftUI + AppKit, Swift package)
+│   │   ├── Sources/Understudy/
+│   │   ├── Tests/           Standalone checks, compiled with swiftc
+│   │   ├── Resources/       App icon
+│   │   └── scripts/         bundle.sh (build the .app), make-icon.swift
+│   └── web/                 Pre-launch website (static, no dependencies)
+│       ├── src/             Layout, pages, assets
+│       ├── build.mjs        Builds src/ into dist/
+│       └── vercel.json      Hosting config and security headers
+├── supabase/migrations/     Database schema, row-level security, waitlist functions
+├── data/
+│   ├── fixtures/teaching/   Synthetic sample agency data (weeks 0–3)
+│   ├── evaluation/holdout/  Held-out test weeks (4–7), for test harnesses only
+│   └── templates/           The weekly report template
+├── docs/
+│   ├── product/             Product context, prototype scope, report spec
+│   ├── app/                 How each part of the Mac app works
+│   ├── research/            Capture experiment and interview kit
+│   └── setup/               Accounts and services setup
+├── tools/ax-capture/        Accessibility capture recorder (experiment)
+├── AGENTS.md                Project guide for coding agents
+└── CHANGELOG.md
+```
+
+## Getting started
+
+### Mac app
+
+Requires macOS 14 or later and the Xcode Command Line Tools.
+
+```bash
+apps/mac/scripts/bundle.sh
+open apps/mac/build/Understudy.app
+```
+
+Without a server config, the app runs in Sample mode. To connect accounts, copy `apps/mac/config.example.json` to `apps/mac/config.local.json` (git-ignored), fill in the Supabase URL and publishable key, and rebuild. See [docs/setup/accounts.md](docs/setup/accounts.md).
+
+To play the website's hero sequence in the real notch, run `open apps/mac/build/Understudy.app --args --notch-demo`.
+
+### Website
+
+```bash
+cd apps/web
+node build.mjs
+npx serve dist
+```
+
+### Database
+
+Apply the files in `supabase/migrations/` in order, in the Supabase SQL editor.
+
+### Checks
+
+Each check is a small executable. For example:
+
+```bash
+swiftc apps/mac/Sources/Understudy/ReportEngine.swift apps/mac/Tests/ReportChecks.swift -o /tmp/report-checks && /tmp/report-checks
+```
+
+The full list is in [AGENTS.md](AGENTS.md#build-and-test), and every pull request runs them automatically.
+
+## Documentation
+
+- [Product context](docs/product/product-context.md): what Understudy is, the decisions behind it, and open questions
+- [Prototype scope](docs/product/prototype-1.md) and the [report spec](docs/product/report-spec.md)
+- [Mac app guide](docs/app/interface-prototype.md), [Watch](docs/app/watch-slice.md), [keyboard shortcuts](docs/app/keyboard-shortcuts.md), [report engine](docs/app/report-engine.md)
+- [Accounts setup](docs/setup/accounts.md)
+
+## Contributing
+
+Work happens on branches and lands through pull requests. The workflow and project rules are in [AGENTS.md](AGENTS.md).
+
+## License
+
+Private repository. All rights reserved. An open-source license is planned but not yet chosen.
