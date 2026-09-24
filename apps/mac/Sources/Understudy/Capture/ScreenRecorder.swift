@@ -17,6 +17,8 @@ final class ScreenRecorder: NSObject, SCContentSharingPickerObserver, SCStreamOu
     private var writer: AVAssetWriter?
     private var input: AVAssetWriterInput?
     private var wroteFrames = false
+    /// Why the writer failed before any frame was written, if it did.
+    private var startFailure: String?
     // Touched only on the main thread.
     private var ready: ((Error?) -> Void)?
     private let ended: () -> Void
@@ -126,7 +128,11 @@ final class ScreenRecorder: NSObject, SCContentSharingPickerObserver, SCStreamOu
               let attachments = CMSampleBufferGetSampleAttachmentsArray(sampleBuffer, createIfNecessary: false) as? [[SCStreamFrameInfo: Any]],
               let raw = attachments.first?[.status] as? Int, SCFrameStatus(rawValue: raw) == .complete else { return }
         if !wroteFrames {
-            guard writer.startWriting() else { return }
+            guard startFailure == nil else { return }
+            guard writer.startWriting() else {
+                startFailure = writer.error?.localizedDescription ?? "The video file couldn't be started."
+                return
+            }
             writer.startSession(atSourceTime: sampleBuffer.presentationTimeStamp)
             wroteFrames = true
         }
@@ -147,7 +153,9 @@ final class ScreenRecorder: NSObject, SCContentSharingPickerObserver, SCStreamOu
         guard let writer, let input, wroteFrames else {
             self.writer?.cancelWriting()
             self.writer = nil; self.input = nil
-            return DispatchQueue.main.async { done(.none) }
+            // No frames: either nothing changed on screen, or the file never started.
+            let result: VideoResult = startFailure.map { .failed($0) } ?? .none
+            return DispatchQueue.main.async { done(result) }
         }
         self.writer = nil; self.input = nil
         input.markAsFinished()

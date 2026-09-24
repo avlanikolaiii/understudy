@@ -93,8 +93,10 @@ final class ActionMonitor {
         let modifiers = event.modifierFlags.intersection([.command, .control, .option, .shift])
         let named = Self.keyNames[Int(event.keyCode)]
         if modifiers.contains(.command) || modifiers.contains(.control) || named != nil {
-            if Int(event.keyCode) == kVK_Delete && !modifiers.contains(.command) && typing != nil {
-                if typing?.text.isEmpty == false { typing?.text.removeLast() }
+            // A plain backspace while typing corrects the text being typed. Any other deletion
+            // (⌥⌫ for a word, or backspacing into text that was already there) is kept as a key.
+            if Int(event.keyCode) == kVK_Delete && modifiers.isEmpty && typing?.text.isEmpty == false {
+                typing?.text.removeLast()
                 return scheduleFlush()
             }
             // A key like Return, Tab, or an arrow, or a shortcut: it's replayed as pressed.
