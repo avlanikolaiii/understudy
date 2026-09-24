@@ -1,7 +1,5 @@
 # CLAUDE.md
 
-This project shares one rulebook with Codex. Read it, and follow it exactly:
+This repository shares one project guide with Codex and other coding agents:
 
 @AGENTS.md
-
-Also read `docs/worklog.md` before you start, and update it before you stop.
