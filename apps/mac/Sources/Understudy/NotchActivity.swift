@@ -246,6 +246,8 @@ final class NotchActivity: ObservableObject {
 
     /// A triggered run that couldn't start, and why, for a few seconds.
     func showRunProblem(_ name: String, reason: String) {
+        // A countdown stays in front: clicking it must still cancel that run.
+        guard mode != .scheduled else { return }
         let token = beginOverlay()
         show(.receipt, label: "Didn't run", detail: name, meta: "", dot: .steady,
              rows: [row("Why", reason, end: "needs you", endTone: .hold)], footer: Self.runReceiptFooter)

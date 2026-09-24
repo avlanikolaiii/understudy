@@ -129,14 +129,27 @@ public enum StepsFromRecording {
             if let code = action.keyCode { parameters["keyCode"] = String(code) }
             // A single key outside a text field is an app's shortcut (E archives in some mail apps):
             // it changes something, but it's pressed exactly as recorded.
-            let effect: Step.Effect = keys == "⌘↩" ? .send : keys == "⌘⌫" ? .delete : keys.count == 1 && keys.first!.isLetter ? .write : .read
             return Step(id: "", intent: "Press \(keys)", executor: .keyboard, target: .init(app: action.bundle),
-                        effect: effect, evidence: .none, parameters: parameters)
+                        effect: effect(ofKeys: keys), evidence: .none, parameters: parameters)
         case .selection:
             parameters["reason"] = "Selecting cells can't be replayed yet."
             return Step(id: "", intent: "Select \(action.cells.map(RecordedAction.addresses) ?? "cells") in \(action.app)",
                         executor: .unsupported, target: target, effect: .read, evidence: .none, parameters: parameters)
         }
+    }
+
+    /// Keys that send or delete in common apps: ⌘↩ sends (Mail's ⇧⌘D too); Delete, ⌘⌫, and #
+    /// (Gmail, Superhuman) delete. Those steps wait for the person's OK.
+    static let sendKeys: Set = ["⌘↩", "⇧⌘D", "⌥⌘↩", "⌃↩"]
+    static let deleteKeys: Set = ["⌫", "⌦", "⌘⌫", "⌘⌦", "⇧⌘⌫", "⌥⇧⌘⌫", "⌥⌘⌫", "#", "⇧#", "⇧3"]
+
+    /// What pressing `keys` does. A single letter outside a text field is an app's own shortcut
+    /// (E archives in some mail apps): it changes something, pressed exactly as recorded.
+    public static func effect(ofKeys keys: String) -> Step.Effect {
+        if sendKeys.contains(keys) { return .send }
+        if deleteKeys.contains(keys) { return .delete }
+        let key = keys.drop { "⌃⌥⇧⌘".contains($0) }
+        return key.count == 1 && key.first!.isLetter || keys.contains("⌘") ? .write : .read
     }
 
     /// What pressing a control named `name` does, judged by its words.

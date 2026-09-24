@@ -32,6 +32,24 @@ struct AddStepView: View {
                 Stepper("\(ui.addSeconds) seconds", value: $ui.addSeconds, in: 1...300).frame(maxWidth: 200)
             case .openLink:
                 TextField("https://…, spotify:…, or a file path", text: $ui.addText).textFieldStyle(.roundedBorder)
+            case .command:
+                Picker("Command", selection: $ui.addCommand) {
+                    ForEach(AppCommand.allCases, id: \.self) { Text($0.title).tag($0) }
+                }.frame(maxWidth: 360)
+                ForEach(ui.addCommand.fields, id: \.key) { field in
+                    if field.options.isEmpty {
+                        TextField(field.label, text: Binding(get: { ui.addValues[field.key] ?? "" }, set: { ui.addValues[field.key] = $0 }))
+                            .textFieldStyle(.roundedBorder)
+                    } else {
+                        Picker(field.label, selection: Binding(get: { ui.addValues[field.key] ?? "" }, set: { ui.addValues[field.key] = $0 })) {
+                            ForEach(field.options, id: \.value) { Text($0.label).tag($0.value) }
+                        }.frame(maxWidth: 300)
+                    }
+                }
+                if let problem = ui.addCommand.problem(ui.addValues), !(ui.addValues.values.allSatisfy(\.isEmpty)) {
+                    Text(problem).font(.caption).foregroundStyle(.orange)
+                }
+                Text("macOS asks once to let Understudy control the app.").font(.caption).foregroundStyle(.secondary)
             }
             HStack {
                 Button("Cancel") { ui.adding = nil; keys.stop() }
@@ -68,6 +86,17 @@ final class KeyCapture: ObservableObject {
         monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             // Modifier-only presses wait for the key that goes with them.
             done(ActionMonitor.keysText(event), Int(event.keyCode))
+            self?.stop()
+            return nil
+        }
+    }
+
+    /// The next key press as an event (for a skill's shortcut).
+    func captureEvent(_ done: @escaping (NSEvent) -> Void) {
+        stop()
+        listening = true
+        monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            done(event)
             self?.stop()
             return nil
         }

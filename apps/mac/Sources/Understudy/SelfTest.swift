@@ -1,4 +1,5 @@
 import AppKit
+import Carbon
 import UnderstudyCore
 
 /// `--self-test[=SESSIONS,SEED] [--self-test-out=DIR]`
@@ -285,6 +286,20 @@ final class SelfTest {
         if let skill = scheduler.scheduled.first(where: { _ in rng.chance(50) }) ?? scheduler.scheduled.first, rng.chance(30) {
             always.append(("triggerFires", { await self.triggerFires(skill) }))
         }
+        // Skills start from anywhere: their own shortcut, a link from another app, or the notch's menu.
+        let runnable = library.skills.filter { !$0.definition.steps.isEmpty }
+        if !runnable.isEmpty, rng.chance(20) {
+            let skill = rng.pick(runnable)
+            always.append(("setSkillShortcut", { self.setSkillShortcut(skill) }))
+            if app.env.skillShortcuts.shortcuts[skill.id] != nil {
+                always.append(("pressSkillShortcut", { await self.pressSkillShortcut(skill) }))
+            }
+            always.append(("runLink", { await self.runFromOutside(skill, link: true) }))
+            if app.notch.hasNotch || app.notch.isExpanded, activity.mode == .idle {
+                always.append(("notchMenuRun", { await self.runFromOutside(skill, link: false) }))
+            }
+        }
+        if rng.chance(3) { always.append(("runLinkUnknown", { await self.runUnknownLink() })) }
         // Accessibility access can be turned off in System Settings at any time (rarely), and a
         // person who sees Watch blocked usually turns it back on.
         if script.failure == nil ? rng.chance(3) : rng.chance(40) {
@@ -452,10 +467,12 @@ final class SelfTest {
                    "trigger.clickCancels", "clicking the notch during the countdown cancels that run")
             return
         }
+        let starting = app.env.watch.phase == .starting
         app.notch.tap()
         await pump(30)
         expect(mainWindow?.isVisible == true, "notch.tapOpensWindow", "clicking the notch must show the main window")
-        if expected != .teach {
+        // Watch that was still starting opens Teach once it records, right after the click.
+        if expected != .teach && !starting && !app.env.watch.isWatching {
             expect(app.env.ui.page == expected, "notch.tapOpensPage", "clicking the notch must open \(expected.rawValue); got \(app.env.ui.page?.rawValue ?? "nil")")
         }
     }
@@ -478,6 +495,8 @@ final class SelfTest {
         let before = app.env.library.skills.count
         let name = app.env.ui.skillName.trimmingCharacters(in: .whitespacesAndNewlines)
         let steps = app.env.ui.draftSteps
+        // A queued run may start (and finish) meanwhile; its notch message then comes after New skill.
+        let queued = app.env.scheduler.hasQueued || app.env.runner.isRunning
         app.env.ui.saveReviewedSkill(library: app.env.library, watch: app.env.watch, activity: app.env.activity)
         await pump(20)
         expect(app.env.library.skills.count == before + 1, "save.addsOneSkill", "saving must add exactly one skill")
@@ -486,7 +505,7 @@ final class SelfTest {
                "the saved skill must have exactly the reviewed steps")
         expect(app.env.ui.page == .skills && !app.env.watch.isPresented, "save.opensSkills", "saving must end Watch and open Skills")
         // A triggered run's countdown or a run in progress takes precedence over the message.
-        expect(app.env.activity.mode == .learned || app.env.scheduler.pending != nil || app.env.runner.isRunning,
+        expect(queued || app.env.activity.mode == .learned || app.env.scheduler.pending != nil || app.env.runner.isRunning,
                "save.showsNewSkill", "the notch must show New skill after saving")
     }
 
@@ -542,7 +561,16 @@ final class SelfTest {
         ui.addText = rng.pick(["Hello {client}", "Bloom", "https://example.com/{week}", "", "   "])
         if rng.chance(70) { ui.addKeys = rng.pick(["⌘K", "↩", "E"]); ui.addKeyCode = 40 }
         ui.addSeconds = rng.int(0...5)
+        ui.addCommand = rng.pick(AppCommand.allCases)
+        ui.addValues = ["link": rng.pick(["https://open.spotify.com/album/4a2yy8XJBSmAu4CQHvwxQt", "{album}", "https://example.com", "spotify:nope", ""]),
+                        "playlist": rng.pick(["Focus", ""]), "path": rng.pick(["~/Downloads", "{file}", "Downloads"]),
+                        "browser": rng.pick(["", "com.apple.Safari", "com.evil.app"]), "to": rng.pick(["a@b.co", "not an address", "{email}"]),
+                        "subject": "Week {week}", "body": "Hi"]
         guard let expected = ui.newStep else { ui.adding = nil; return }   // Add step is disabled while incomplete
+        if ui.addKind == .command {
+            expect(ui.addCommand.problem(ui.addValues) == nil && expected.parameters["command"] == ui.addCommand.rawValue,
+                   "steps.commandChecked", "an App command step is added only with values it can run")
+        }
         ui.finishAdding()
         let after = list == "review" ? ui.draftSteps : ui.editSteps
         expect(after.count == steps.count + 1 && after[index].intent == expected.intent && after[index].parameters["action"] == expected.parameters["action"]
@@ -622,17 +650,102 @@ final class SelfTest {
         let scheduler = app.env.scheduler, runner = app.env.runner
         let wasRunning = runner.isRunning
         let watching = app.env.watch.isWatching
+        // A run already waiting (from a link or the notch menu) keeps its own place and timing.
+        let wasQueued = scheduler.hasQueued
         scheduler.fire(skill)
         await pump(5)
         if watching {
             // It waits while Watch records: no countdown over the recording.
             expect(app.env.activity.mode != .scheduled && !(runner.isRunning && runner.skill?.id == skill.id), "trigger.waitsForWatch",
                    "a triggered run waits while Watch records")
-        } else if !wasRunning && scheduler.pending?.id == skill.id {
+        } else if !wasRunning && !wasQueued && scheduler.pending?.id == skill.id {
             await waitUntil(0.5) { self.app.env.activity.mode == .scheduled || runner.isRunning || scheduler.pending == nil }
             expect(app.env.activity.mode == .scheduled || runner.isRunning || scheduler.pending == nil, "trigger.countdownFirst",
                    "a triggered run counts down in the notch before it starts")
         }
+    }
+
+    /// A shortcut for one skill: sometimes the Watch shortcut or another skill's, which must be refused.
+    private func setSkillShortcut(_ skill: Skill) {
+        let shortcuts = app.env.skillShortcuts
+        let taken = shortcuts.shortcuts.filter { $0.key != skill.id }.map(\.value)
+        let digits: [(UInt32, String)] = [(18, "1"), (19, "2"), (20, "3"), (21, "4"), (23, "5")]
+        let digit = rng.pick(digits)
+        let candidate: KeyboardShortcut
+        switch rng.int(0...9) {
+        case 0: candidate = app.env.shortcuts.shortcut
+        case 1 where !taken.isEmpty: candidate = rng.pick(taken)
+        case 2: candidate = KeyboardShortcut(keyCode: digit.0, modifiers: 0, keyLabel: digit.1)   // no modifier
+        default: candidate = KeyboardShortcut(keyCode: digit.0, modifiers: UInt32(optionKey), keyLabel: digit.1)
+        }
+        let before = shortcuts.shortcuts
+        let clash = candidate.validationError != nil
+            || (candidate.keyCode == app.env.shortcuts.shortcut.keyCode && candidate.modifiers == app.env.shortcuts.shortcut.modifiers)
+            || taken.contains { $0.keyCode == candidate.keyCode && $0.modifiers == candidate.modifiers }
+        let accepted = shortcuts.set(candidate, for: skill.id)
+        if clash {
+            expect(!accepted && shortcuts.shortcuts == before && shortcuts.error?.skill == skill.id, "shortcut.clashRefused",
+                   "a skill's shortcut that clashes with Watch's or another skill's is refused, with a reason")
+        } else {
+            expect(accepted && shortcuts.shortcuts[skill.id] == candidate, "shortcut.saved", "a free shortcut is saved for that skill")
+        }
+        let values = Set(shortcuts.shortcuts.values.map { "\($0.keyCode)-\($0.modifiers)" })
+        expect(values.count == shortcuts.shortcuts.count, "shortcut.unique", "no two skills share a shortcut")
+    }
+
+    /// The person asked directly, so it runs at once, or says why it can't.
+    private func pressSkillShortcut(_ skill: Skill) async {
+        let runner = app.env.runner
+        let wasRunning = runner.isRunning
+        app.runNow(skill.id)
+        await pump(5)
+        if !wasRunning {
+            expect((runner.isRunning && runner.skill?.id == skill.id) || runner.problem != nil || !runner.results.isEmpty, "shortcut.runsSkill",
+                   "a skill's shortcut starts that skill, or says why it can't")
+        }
+    }
+
+    /// A link (understudy://run) or the notch's menu: another app or a stray click could have
+    /// started it, so it always counts down first, like a trigger.
+    private func runFromOutside(_ skill: Skill, link: Bool) async {
+        let scheduler = app.env.scheduler, runner = app.env.runner
+        let wasRunning = runner.isRunning, watching = app.env.watch.isWatching
+        let wasPending = scheduler.pending != nil, wasQueued = scheduler.isQueued(skill.id)
+        if link {
+            var parts = URLComponents(string: "understudy://run")!
+            // By name, unless another skill with steps has the same name (the link then names none).
+            let byName = rng.chance(50)
+            if byName, case .failure = AppDelegate.skill(named: skill.name, in: app.env.library.skills) {
+                parts.queryItems = [URLQueryItem(name: "skill", value: skill.name)]
+                app.application(NSApp, open: [parts.url!])
+                await pump(5)
+                expect(!scheduler.isQueued(skill.id) || wasQueued, "link.sameNameRunsNothing",
+                       "a link whose name fits several skills runs none of them")
+                return
+            }
+            parts.queryItems = [URLQueryItem(name: "skill", value: byName ? skill.name : skill.id.uuidString)]
+                + skill.variables.map { URLQueryItem(name: $0, value: "value-\(rng.int(1...9))") }
+            app.application(NSApp, open: [parts.url!])
+        } else {
+            app.runFromMenu(skill)
+        }
+        // Queued for the countdown at once (never started directly), when nothing else is going on.
+        if !wasRunning && !watching && !wasPending {
+            expect((scheduler.pending != nil || scheduler.isQueued(skill.id)) && !(runner.isRunning && runner.skill?.id == skill.id),
+                   link ? "link.countdownFirst" : "menu.countdownFirst", "a run from a link or the notch menu counts down before it starts")
+        }
+        await pump(5)
+    }
+
+    /// A link naming no skill says so in the notch and runs nothing.
+    private func runUnknownLink() async {
+        let runner = app.env.runner, scheduler = app.env.scheduler
+        let waiting = scheduler.waitingCount, running = runner.isRunning
+        app.application(NSApp, open: [URL(string: "understudy://run?skill=No%20such%20skill%20\(rng.int(1...999))")!])
+        // Checked at once, before a run already waiting can move on.
+        expect(scheduler.waitingCount == waiting && runner.isRunning == running, "link.unknownRunsNothing",
+               "a link to a skill that doesn't exist runs nothing")
+        await pump(5)
     }
 
     /// Run now / Test step by step. A step can fail now and then, as when a control isn't found.
@@ -656,8 +769,11 @@ final class SelfTest {
     private func resume(_ skill: Skill, from index: Int) async {
         let earlier = Set(skill.definition.steps.prefix(index).map(\.id))
         let before = performer.performed.count
+        // A queued run (from a trigger or a link) may start right after; only this run is checked.
+        let quiet = !app.env.scheduler.hasQueued
         guard app.env.runner.start(skill, mode: .run, from: index) else { return }
         await pump(30)
+        guard quiet, !app.env.scheduler.hasQueued, app.env.runner.skill?.id == skill.id else { return }
         expect(!performer.performed.dropFirst(before).contains(where: earlier.contains), "run.resumeSkipsDone",
                "resuming never repeats the steps before it")
         expect(app.env.runner.results.prefix(index).allSatisfy { $0.status == .skipped }, "run.resumeMarksDone",
@@ -816,6 +932,7 @@ final class SelfTest {
         if runner.isRunning { visit(runner.pause == nil ? "run.running" : "run.waiting") }
         if app.env.activity.mode == .scheduled { visit("trigger.countdown") }
         if !app.env.scheduler.scheduled.isEmpty { visit("trigger.set") }
+        if !app.env.skillShortcuts.shortcuts.isEmpty { visit("launch.shortcut") }
         if app.env.ui.page == .results, (app.env.library.receipts.first { $0.id == app.env.ui.selectedReceipt } ?? app.env.library.receipts.first)?.isRun == true {
             visit("run.receipt")
         }

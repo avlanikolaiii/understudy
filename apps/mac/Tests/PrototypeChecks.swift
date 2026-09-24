@@ -50,6 +50,10 @@ struct PrototypeChecks {
         var unreadable = false
         do { _ = try file.load() } catch { unreadable = true }
         precondition(unreadable)
+        // A stopped run stays "Stopped" when the account reloads it (the outcome is read from its report).
+        precondition(Receipt.outcome(fromReport: "Play Bloom · Stopped\n1. Open Spotify: Done.") == "Stopped")
+        precondition(Receipt.outcome(fromReport: "A · B · Blocked · needs you") == "Blocked · needs you")
+        precondition(Receipt.outcome(fromReport: "Weekly report") == nil)
         print("PASS: complete sample, missing-data propagation, simulation disclosure, receipt persistence, and versioned sample-mode storage")
     }
 }

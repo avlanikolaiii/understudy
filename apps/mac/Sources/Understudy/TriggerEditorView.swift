@@ -38,7 +38,7 @@ struct TriggerEditorView: View {
             HStack(spacing: 12) {
                 Button("Save") { save(ui.finishedTrigger(device: scheduler.device)) }
                     .buttonStyle(.borderedProminent)
-                    .disabled(!draft.isComplete || ui.finishedTrigger(device: scheduler.device) == saved)
+                    .disabled(!ui.finishedTrigger(device: scheduler.device).isComplete || ui.finishedTrigger(device: scheduler.device) == saved)
                 Text(status).font(.callout).foregroundStyle(.secondary)
             }
             if draft.kind != .manual {

@@ -33,7 +33,13 @@ final class Scheduler: ObservableObject {
     private var folders: [UUID: FolderWatch] = [:]
     private var observers: [NSObjectProtocol] = []
     /// Skills waiting their turn, with the values their trigger gave (e.g. the file that arrived).
-    private var queue: [(skill: Skill, values: [String: String])] = []
+    /// Runs waiting their turn. `triggered` runs need their trigger to still be set on this Mac.
+    private struct Entry { var skill: Skill; let values: [String: String]; let triggered: Bool }
+    private var queue: [Entry] = []
+    private var pendingEntry: Entry?
+    /// Interval deadlines already handled, so a timer isn't rearmed for the same one.
+    private var handled: [UUID: Date] = [:]
+    private var waiter: Task<Void, Never>?
     private var countdownTask: Task<Void, Never>?
     private var librarySink: AnyCancellable?
 
@@ -74,11 +80,14 @@ final class Scheduler: ObservableObject {
     func nextRun(of skill: Skill) -> Date? {
         let trigger = skill.definition.trigger
         guard trigger.device == device else { return nil }
-        return trigger.nextRun(after: trigger.kind == .interval ? lastRun(skill) ?? now() : now())
+        guard trigger.kind == .interval else { return trigger.nextRun(after: now()) }
+        let base = [lastRun(skill), handled[skill.id]].compactMap { $0 }.max() ?? now()
+        return trigger.nextRun(after: base)
     }
 
     /// Rebuilds timers and folder watches from the library, and runs a schedule missed while asleep.
     func refresh() {
+        dropStale()
         timers.values.forEach { $0.invalidate() }
         timers = [:]
         let skills = scheduled
@@ -98,8 +107,11 @@ final class Scheduler: ObservableObject {
                 arm(skill)
             case .fileAdded:
                 if folders[skill.id]?.path != trigger.folder, let path = trigger.folder {
-                    folders[skill.id] = FolderWatch(path: path) { [weak self] file in
-                        self?.fire(skill, values: ["file": (path as NSString).appendingPathComponent(file), "fileName": file])
+                    let id = skill.id
+                    folders[id] = FolderWatch(path: path) { [weak self] file in
+                        // The skill as it is now: its steps may have been edited since the watch began.
+                        guard let self, let current = self.scheduled.first(where: { $0.id == id }) else { return }
+                        self.fire(current, values: ["file": (path as NSString).appendingPathComponent(file), "fileName": file])
                     }
                 }
             case .appOpened, .manual:
@@ -113,16 +125,44 @@ final class Scheduler: ObservableObject {
         countdownTask?.cancel()
         countdownTask = nil
         if let skill = pending { markRun(skill) }
-        pending = nil
+        pending = nil; pendingEntry = nil
         activity.hideCountdown()
         startNext()
     }
 
-    /// A trigger fired: queue the skill, and start it when nothing else is running.
-    func fire(_ skill: Skill, values: [String: String] = [:]) {
+    /// Whether the skill waits its turn (queued behind a run, or counting down).
+    func isQueued(_ id: UUID) -> Bool { pending?.id == id || queue.contains { $0.skill.id == id } }
+
+    /// The queued skill as it is now, or nil when it was deleted, lost its steps, belongs to
+    /// someone who signed out, or (for a triggered run) no longer has its trigger on this Mac.
+    private func current(_ entry: Entry) -> Skill? {
+        if entry.triggered { return scheduled.first { $0.id == entry.skill.id } }
+        return library.skills.first { $0.id == entry.skill.id && !$0.definition.steps.isEmpty }
+    }
+
+    /// Drops waiting runs whose skill changed that way, and cancels such a countdown.
+    private func dropStale() {
+        queue = queue.compactMap { entry in current(entry).map { Entry(skill: $0, values: entry.values, triggered: entry.triggered) } }
+        guard let entry = pendingEntry, current(entry) == nil else { return }
+        countdownTask?.cancel()
+        countdownTask = nil
+        pending = nil; pendingEntry = nil
+        activity.hideCountdown()
+        startNext()
+    }
+
+    /// Whether any run waits its turn.
+    var hasQueued: Bool { pending != nil || !queue.isEmpty }
+
+    /// How many runs wait their turn, counting down or queued.
+    var waitingCount: Int { (pending == nil ? 0 : 1) + queue.count }
+
+    /// A trigger fired (or, with `triggered` false, a link or the notch menu asked): queue the
+    /// skill, and start it when nothing else is running.
+    func fire(_ skill: Skill, values: [String: String] = [:], triggered: Bool = true) {
         guard !queue.contains(where: { $0.skill.id == skill.id }), pending?.id != skill.id,
               runner.skill?.id != skill.id || !runner.isRunning else { return }
-        queue.append((skill, values))
+        queue.append(Entry(skill: skill, values: values, triggered: triggered))
         startNext()
     }
 
@@ -130,10 +170,14 @@ final class Scheduler: ObservableObject {
 
     private func arm(_ skill: Skill) {
         guard let next = nextRun(of: skill) else { return }
+        let id = skill.id
         let timer = Timer(fire: next, interval: 0, repeats: false) { _ in
             MainActor.assumeIsolated {
-                self.fire(skill)
-                self.arm(skill)
+                // This deadline is handled: the next one comes after it, even before the run starts.
+                self.handled[id] = next
+                guard let current = self.scheduled.first(where: { $0.id == id }) else { return }
+                self.fire(current)
+                self.arm(current)
             }
         }
         RunLoop.main.add(timer, forMode: .common)
@@ -148,9 +192,12 @@ final class Scheduler: ObservableObject {
     }
 
     private func startNext() {
-        guard pending == nil, !runner.isRunning, !queue.isEmpty else { return }
-        let (skill, values) = queue.removeFirst()
-        pending = skill
+        guard pending == nil, !queue.isEmpty else { return }
+        // A run started by hand is going: wait for it to end, then start the next one.
+        guard !runner.isRunning else { return waitForRunThenNext() }
+        let entry = queue.removeFirst()
+        let skill = entry.skill, values = entry.values
+        pending = skill; pendingEntry = entry
         countdownTask = Task { [weak self] in
             guard let self else { return }
             // Wait while Watch records, then for the person to pause, so the run doesn't type into
@@ -167,9 +214,9 @@ final class Scheduler: ObservableObject {
             for remaining in stride(from: Int(Self.countdown), to: 0, by: -1) {
                 // A run started by hand, or Watch started, meanwhile: this one waits its turn again.
                 if self.runner.isRunning || self.busy() {
-                    self.pending = nil
+                    self.pending = nil; self.pendingEntry = nil
                     self.countdownTask = nil
-                    self.queue.insert((skill, values), at: 0)
+                    self.queue.insert(entry, at: 0)
                     self.activity.hideCountdown()
                     return self.waitForRunThenNext()
                 }
@@ -177,20 +224,25 @@ final class Scheduler: ObservableObject {
                 await self.sleep(1)
                 if Task.isCancelled { return }
             }
-            self.pending = nil
+            self.pending = nil; self.pendingEntry = nil
             self.countdownTask = nil
-            self.markRun(skill)
-            if !self.runner.start(skill, mode: .run, values: values) {
+            // The skill as it is now (edited, deleted, or signed out meanwhile).
+            guard let latest = self.current(entry) else { return self.startNext() }
+            self.markRun(latest)
+            if !self.runner.start(latest, mode: .run, values: values) {
                 // E.g. Watch is recording, or Accessibility is off: say so instead of failing silently.
-                self.activity.showRunProblem(skill.name, reason: self.runner.problem ?? "It couldn't start.")
+                self.activity.showRunProblem(latest.name, reason: self.runner.problem ?? "It couldn't start.")
             }
             self.waitForRunThenNext()
         }
     }
 
+    /// One waiter at a time: it starts the next run once nothing is running or recording.
     private func waitForRunThenNext() {
-        Task { [weak self] in
+        guard waiter == nil else { return }
+        waiter = Task { [weak self] in
             while let self, self.runner.isRunning || self.busy() { await self.sleep(1) }
+            self?.waiter = nil
             self?.startNext()
         }
     }

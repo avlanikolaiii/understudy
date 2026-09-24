@@ -6,7 +6,7 @@ public enum ManualStep {
     public typealias Step = SkillDefinition.Step
 
     public enum Kind: String, CaseIterable, Sendable {
-        case openApp, keys, type, waitText, waitSeconds, openLink
+        case openApp, keys, type, waitText, waitSeconds, openLink, command
 
         public var title: String {
             switch self {
@@ -16,6 +16,7 @@ public enum ManualStep {
             case .waitText: "Wait until text shows"
             case .waitSeconds: "Wait some seconds"
             case .openLink: "Open a link or file"
+            case .command: "App command"
             }
         }
     }
@@ -30,7 +31,7 @@ public enum ManualStep {
         var parameters = ["action": "keys", "keys": keys, "app": app ?? ""]
         if let keyCode { parameters["keyCode"] = String(keyCode) }
         return Step(id: newID(), intent: "Press \(keys)", executor: .keyboard, target: .init(app: bundle),
-                    effect: keys == "⌘↩" ? .send : .read, evidence: .none, parameters: parameters)
+                    effect: StepsFromRecording.effect(ofKeys: keys), evidence: .none, parameters: parameters)
     }
 
     /// Typed into whatever has focus in the app, as a recorded Type step is.
@@ -63,7 +64,7 @@ public enum ManualStep {
 /// runs (or given by its trigger, like the file that arrived).
 public enum Variables {
     /// The parameters that can hold placeholders.
-    static let fields = ["text", "link"]
+    static let fields = ["text", "link", "playlist", "path", "to", "subject", "body"]
 
     /// Placeholder names in the steps, in order of first use.
     public static func names(in steps: [SkillDefinition.Step]) -> [String] {

@@ -19,6 +19,10 @@ final class AppEnvironment {
     let performer: StepPerformer
     /// Starts skills when their trigger fires.
     let scheduler: Scheduler
+    /// A keyboard shortcut per skill.
+    let skillShortcuts: SkillShortcuts
+    /// Run notifications; none in the self-test.
+    let notifier = Notifier()
     let ui = WorkspaceState()
     let shortcuts = ShortcutManager()
 
@@ -70,6 +74,14 @@ final class AppEnvironment {
         } else {
             scheduler = Scheduler(library: library, runner: runner, activity: activity,
                                   busy: { [watch, activity] in watch.isWatching || watch.phase == .starting || activity.isRehearsing })
+        }
+        if selfTest != nil {
+            // Shortcuts are checked without registering real system hot keys.
+            skillShortcuts = SkillShortcuts(defaults: UserDefaults(suiteName: "understudy-self-test-keys-\(UUID().uuidString)")!,
+                                            reserved: { [shortcuts] in shortcuts.shortcut }, install: { _, _ in NSObject() })
+        } else {
+            skillShortcuts = SkillShortcuts(reserved: { [shortcuts] in shortcuts.shortcut })
+            runner.notify = { [notifier] title, body, page in notifier.post(title: title, body: body, opens: page) }
         }
     }
 }
