@@ -11,6 +11,8 @@ struct SelfTestOptions {
     let seed: UInt64
     let out: URL
     let libraryFile: LocalStore
+    /// Where Watch saves recordings: a temporary folder, never the person's.
+    let recordings: URL
     let clock = TestClock()
 
     init?(arguments: [String]) {
@@ -22,6 +24,7 @@ struct SelfTestOptions {
         out = URL(fileURLWithPath: outArg.map(String.init) ?? NSTemporaryDirectory() + "understudy-self-test")
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent("understudy-self-test-\(UUID().uuidString)")
         libraryFile = LocalStore(url: dir.appendingPathComponent("library.json"))
+        recordings = dir.appendingPathComponent("recordings")
     }
 
     /// Screen captures run the notch at real speed. Simulated sessions run it 1,000× faster,
@@ -121,7 +124,7 @@ final class SelfTest {
         await pump(250)
         snapshot(mainWindow, name: "teach-1-describe")
         app.env.ui.startWatch(app.env.watch)
-        advance(12)
+        for _ in 0..<4 { advance(3) }
         await pump(settle)
         snapshot(mainWindow, name: "teach-2-show")
         snapshot(notchWindow, name: "notch-watching")
@@ -261,7 +264,22 @@ final class SelfTest {
             ("shortcut", { await self.pressShortcut() }),
             ("relaunch", { self.checkPersistence() }),
         ]
-        if watch.isPlaying { always.append(("tick", { self.advance(self.rng.int(1...9)) })) }
+        if watch.isWatching {
+            always.append(("tick", { self.advance(self.rng.int(1...9)) }))
+            // Sharing can be stopped from macOS's menu bar; Watch must stop and save.
+            always.append(("stopSharing", {
+                self.script.endSharing()
+                self.expect(self.app.env.watch.phase == .stopped && self.app.env.watch.recording != nil,
+                            "watch.stopsWhenSharingEnds", "when sharing ends, Watch must stop and save the take")
+            }))
+        }
+        // Videos finish writing a moment after Stop, sometimes after another take has started.
+        if rng.chance(50) { script.finishVideos() }
+        // Accessibility access can be turned off in System Settings at any time (rarely), and a
+        // person who sees Watch blocked usually turns it back on.
+        if script.failure == nil ? rng.chance(3) : rng.chance(40) {
+            always.append(("permission", { self.script.failure = self.script.failure == nil ? ScreenCapture.accessibilityNeeded : nil }))
+        }
         // The notch pill is always on screen on a notched Mac; elsewhere only while the strip is open.
         if app.notch.hasNotch || app.notch.isExpanded { always.append(("notchTap", { await self.tapNotch() })) }
 
@@ -285,12 +303,14 @@ final class SelfTest {
             case .teach where ui.teachingStep == 1:
                 // The Watch view: its buttons depend on the session's state.
                 onScreen.append(("backToDescribe", { ui.teachingStep = 0 }))
-                if watch.isPlaying { onScreen.append(("stopButton", { watch.stop() })) }
+                // Shown when Watch couldn't start (e.g. no Accessibility access), with the reason.
+                if !watch.isPresented && watch.phase != .starting { onScreen.append(("startWatchHere", { watch.start() })) }
+                if watch.isWatching { onScreen.append(("stopButton", { watch.stop() })) }
                 if watch.isPresented {
                     onScreen.append(("addNote", { watch.ruleDraft = self.rng.pick(self.notes); watch.addRule() }))
                 }
-                if watch.isPresented && !watch.isPlaying {
-                    onScreen.append(("replay", { watch.start(keepingRules: true) }))
+                if watch.isPresented && !watch.isWatching {
+                    onScreen.append(("recordAgain", { watch.start(keepingRules: true) }))
                     onScreen.append(("review", { self.review() }))
                 }
             case .teach:
@@ -328,21 +348,33 @@ final class SelfTest {
 
     // MARK: Actions with their own expectations
 
+    /// The scripted capture that stands in for the screen during the self-test. It reports a
+    /// video for each take, finished later, as the recorder does.
+    private var script: ScriptedCapture {
+        let script = app.env.capture as! ScriptedCapture
+        // Now and then the video can't be saved (e.g. the disk is full); Watch must say so.
+        script.video = rng.chance(5) ? ScriptedCapture.failingVideo : "screen.mov"
+        return script
+    }
+
+    /// Time passes during Watch, and the person does the next step of the task.
     private func advance(_ seconds: Int) {
         options.clock.time += TimeInterval(seconds)
         app.env.watch.advance()
+        script.emitNext()
     }
 
     private func pressShortcut() async {
-        let wasPlaying = app.env.watch.isPlaying
+        let wasWatching = app.env.watch.isWatching
         let before = app.env.activity.mode
         app.shortcutPressed()
         await pump(30)
-        if wasPlaying {
-            expect(!app.env.watch.isPlaying && app.env.ui.page == .teach && app.env.ui.teachingStep == 2, "shortcut.stopsWatch",
+        if wasWatching {
+            expect(!app.env.watch.isWatching && app.env.ui.page == .teach && app.env.ui.teachingStep == 2, "shortcut.stopsWatch",
                    "pressing the shortcut during Watch must stop it and open Review")
         } else if before == .idle || before == .demo {
-            expect(app.env.watch.isPlaying, "shortcut.startsWatch", "pressing the shortcut when idle must start Watch")
+            expect(app.env.watch.isWatching || (script.failure != nil && app.env.watch.problem != nil), "shortcut.startsWatch",
+                   "pressing the shortcut when idle must start Watch, or say why it can't")
         }
     }
 
@@ -367,7 +399,7 @@ final class SelfTest {
         let once = app.env.ui.rules
         app.env.ui.reviewWatch(app.env.watch)
         expect(app.env.ui.rules == once, "review.noDuplicates", "reviewing twice must not duplicate notes")
-        expect(app.env.ui.teachingStep == 2 && !app.env.watch.isPlaying, "review.opensReview", "Review must stop Watch and show step 3")
+        expect(app.env.ui.teachingStep == 2 && !app.env.watch.isWatching, "review.opensReview", "Review must stop Watch and show step 3")
     }
 
     private func save() async {
@@ -437,12 +469,24 @@ final class SelfTest {
         expect(app.env.library.mode == .sample && app.env.model.client == nil, "sample.noServer", "a Mac without a server stays in Sample mode")
         expect(!app.env.library.skills.isEmpty, "skills.nonEmpty", "there is always at least one skill")
         expect(activity.rows.count <= 4, "notch.rowCap", "the notch shows at most 4 rows")
-        if activity.mode != .idle {
+        switch activity.mode {
+        case .idle: break
+        case .watching, .stopped:
+            expect(activity.footer == NotchActivity.watchFooter, "notch.honestLabel", "Watch must say it records on this Mac, never passwords")
+        default:
             expect(activity.footer.contains("Simulated") || activity.footer.contains("Concept demonstration"),
-                   "notch.honestLabel", "every notch state must say Simulated or Concept demonstration")
+                   "notch.honestLabel", "every simulated notch state must say Simulated or Concept demonstration")
+        }
+        let watch = app.env.watch
+        expect(watch.problem == nil || !watch.isWatching, "watch.problemMeansNotWatching", "Watch shows a problem only when it isn't recording")
+        expect(!watch.isPresented || watch.actions.count <= ScriptedCapture.script.count, "watch.actionsInOrder",
+               "Watch records each action once")
+        if watch.phase == .stopped {
+            expect(watch.recording?.actions == watch.actions && watch.recording?.notes == watch.rules, "watch.savedOnStop",
+                   "a stopped Watch has saved its actions and notes")
         }
 
-        if app.env.watch.isPlaying && activity.mode != .demo && ![NotchActivity.Mode.learned, .rehearsing, .receipt].contains(activity.mode) {
+        if app.env.watch.isWatching && activity.mode != .demo && ![NotchActivity.Mode.learned, .rehearsing, .receipt].contains(activity.mode) {
             expect(activity.mode == .watching && activity.dot == .pulse, "notch.watching", "a playing Watch must show the pulsing Watching strip")
         }
     }
@@ -466,6 +510,7 @@ final class SelfTest {
         visit("page.\(app.env.ui.page?.rawValue ?? "none")")
         if app.env.ui.page == .teach { visit("teach.step\(app.env.ui.teachingStep + 1)") }
         visit("notch.\(app.env.activity.mode)")
+        if app.env.watch.problem != nil { visit("watch.blocked") }
         visit(mainWindow?.isVisible == true ? "window.main.open" : "window.main.closed")
         visit("account.\(app.env.model.phase == .notConfigured ? "notConfigured" : "other")")
     }

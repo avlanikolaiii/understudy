@@ -23,7 +23,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let open = NSMenuItem(title: "Open Understudy", action: #selector(openWorkspace), keyEquivalent: "o")
         open.target = self
         menu.addItem(open)
-        let watchItem = NSMenuItem(title: "Watch a Task (Simulated)", action: #selector(shortcutPressed), keyEquivalent: "")
+        let watchItem = NSMenuItem(title: "Watch a Task", action: #selector(shortcutPressed), keyEquivalent: "")
         watchItem.target = self
         menu.addItem(watchItem)
         let settingsItem = NSMenuItem(title: "Keyboard Shortcut…", action: #selector(openSettings), keyEquivalent: ",")
@@ -38,7 +38,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 guard let self else { return }
                 let label = self.env.shortcuts.shortcut.display
                 self.env.model.shortcutLabel = self.env.shortcuts.isActive ? label : "Shortcut unavailable"
-                watchItem?.title = self.env.shortcuts.isActive ? "Watch a Task (Simulated) · \(label)" : "Watch a Task (Simulated)"
+                watchItem?.title = self.env.shortcuts.isActive ? "Watch a Task · \(label)" : "Watch a Task"
             }
         }
         if let options = env.selfTest {
@@ -94,6 +94,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApplication.shared.mainMenu = menu
     }
 
+    /// Quitting while Watch records, or while a stopped take's video is still being written,
+    /// waits (up to 5 s) for the take to be saved.
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        guard env.watch.isWatching || env.watch.savingVideos > 0 else { return .terminateNow }
+        var replied = false
+        let reply = { if !replied { replied = true; sender.reply(toApplicationShouldTerminate: true) } }
+        if env.watch.isWatching { env.watch.stop() }
+        env.watch.whenSaved(reply)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 5, execute: reply)
+        return .terminateLater
+    }
+
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
         // Keep a focused settings recorder in place when the app is already visible.
         if !flag { workspace.show() }
@@ -110,7 +122,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// and opens the review in the main window.
     @objc func shortcutPressed() {
         // Stopping Watch always wins, even while a rehearsal or receipt is showing in the notch.
-        if env.watch.isPlaying {
+        if env.watch.isWatching {
             env.ui.reviewWatch(env.watch)
             workspace.show()
             return
@@ -127,6 +139,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             workspace.show(.results)
         case .idle, .demo:
             env.ui.startWatch(env.watch)
+            // If Watch can't start (e.g. no Accessibility access), show why.
+            if env.watch.problem != nil { workspace.show() }
         }
     }
 
