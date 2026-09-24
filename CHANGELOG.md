@@ -27,6 +27,11 @@ All notable changes to this project are recorded here. The format follows
 - `0003` explicit Data API grants for signed-in users; none for anonymous users.
 - `0004`–`0005` the waitlist table and its `join_waitlist` / `add_waitlist_details` functions. They reveal nothing about existing signups and keep an outstanding token across repeated joins.
 
+### Quality
+- `qa/run.py`: one command runs the checks, simulated-user sessions on the real app (`--self-test`), website QA, and held-out evals. It draws a coverage graph and a trend report.
+- The report engine matches all four held-out weeks exactly, including the week with missing spend.
+- CI runs the full QA and a real first launch on macOS 14, 15, and 26 for every pull request.
+
 ### Research and data
 - Synthetic agency fixtures (teaching weeks 0–3) and held-out evaluation weeks 4–7 with a SHA-256 manifest.
 - A report spec with exact formulas, rounding, and the missing-data rule.

@@ -46,6 +46,7 @@ understudy/
 │   ├── app/                 How each part of the Mac app works
 │   ├── research/            Capture experiment and interview kit
 │   └── setup/               Accounts and services setup
+├── qa/                      Self-test runner, flow graph, evals, QA report
 ├── tools/ax-capture/        Accessibility capture recorder (experiment)
 ├── AGENTS.md                Project guide for coding agents
 └── CHANGELOG.md
@@ -93,7 +94,9 @@ The full list is in [AGENTS.md](AGENTS.md#build-and-test), and every pull reques
 - [Product context](docs/product/product-context.md): what Understudy is, the decisions behind it, and open questions
 - [Prototype scope](docs/product/prototype-1.md) and the [report spec](docs/product/report-spec.md)
 - [Mac app guide](docs/app/interface-prototype.md), [Watch](docs/app/watch-slice.md), [keyboard shortcuts](docs/app/keyboard-shortcuts.md), [report engine](docs/app/report-engine.md)
+- [Long-term plan](docs/product/long-term-plan.md): what is temporary today, the target architecture, and the roadmap
 - [Accounts setup](docs/setup/accounts.md)
+- QA: `python3 qa/run.py` runs every suite and writes `qa/out/report.html` (see [AGENTS.md](AGENTS.md#qa-and-evals))
 
 ## Contributing
 
