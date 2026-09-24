@@ -217,6 +217,12 @@ final class ActionMonitor {
         kVK_Delete: "⌫", kVK_ForwardDelete: "⌦",
     ]
 
+    /// A key press as Watch names it: its modifiers, then the key ("⌘K", "↩", "⇧E").
+    static func keysText(_ event: NSEvent) -> String {
+        let modifiers = event.modifierFlags.intersection([.command, .control, .option, .shift])
+        return symbols(modifiers) + (keyNames[Int(event.keyCode)] ?? event.charactersIgnoringModifiers?.uppercased() ?? "")
+    }
+
     private static func symbols(_ flags: NSEvent.ModifierFlags) -> String {
         (flags.contains(.control) ? "⌃" : "") + (flags.contains(.option) ? "⌥" : "")
             + (flags.contains(.shift) ? "⇧" : "") + (flags.contains(.command) ? "⌘" : "")

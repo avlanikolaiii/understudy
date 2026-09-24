@@ -325,6 +325,7 @@ final class SelfTest {
                 }
             case .teach:
                 onScreen.append(("backToShow", { ui.teachingStep = 1 }))
+                if !ui.draftSteps.isEmpty { onScreen.append(("addStep", { self.addStep(to: "review") })) }
                 if ui.canSaveSkill { onScreen.append(("saveSkill", { await self.save() })) }
                 // Each reviewed step has Move up, Delete, and (for typing) a text field.
                 if !ui.draftSteps.isEmpty { onScreen.append(("editStep", { self.editStep() })) }
@@ -332,7 +333,16 @@ final class SelfTest {
                 let active = ui.activeSkill(in: library)
                 let runner = app.env.runner
                 onScreen.append(("selectSkill", { ui.selectedSkill = self.rng.pick(library.skills) }))
-                if !active.isSample && ui.editing == nil {
+                if ui.editing == active.id {
+                    // Edit skill is open: add a step, record one again, save, or cancel.
+                    onScreen.append(("addStep", { self.addStep(to: "edit") }))
+                    if !ui.editSteps.isEmpty && !watch.isWatching && watch.phase != .starting && !runner.isRunning {
+                        onScreen.append(("rerecordStep", { await self.rerecordStep(of: active) }))
+                    }
+                    onScreen.append(("saveEdit", { await self.saveEdit(active) }))
+                    onScreen.append(("cancelEdit", { ui.cancelEdit() }))
+                } else if !active.isSample && ui.editing == nil {
+                    onScreen.append(("openEditor", { ui.beginEdit(active) }))
                     onScreen.append(("editSkill", { await self.editSkill(active) }))
                     if !(runner.isRunning && runner.skill?.id == active.id) {
                         onScreen.append(("deleteSkill", { await self.deleteSkill(active) }))
@@ -519,6 +529,55 @@ final class SelfTest {
         expect(saved?.name == expected.name && saved?.definition.steps == expected.definition.steps
                && saved?.definition.trigger == skill.definition.trigger && ui.editing == nil,
                "skill.edit", "Save changes keeps exactly the edits, and the schedule")
+    }
+
+    /// Add step: one of each kind the form offers, at a random place.
+    private func addStep(to list: String) {
+        let ui = app.env.ui
+        let steps = list == "review" ? ui.draftSteps : ui.editSteps
+        let index = rng.int(0...steps.count)
+        ui.beginAdding(to: list, at: index)
+        ui.addKind = rng.pick(ManualStep.Kind.allCases)
+        ui.addApp = "com.apple.TextEdit"; ui.addAppName = "TextEdit"
+        ui.addText = rng.pick(["Hello {client}", "Bloom", "https://example.com/{week}", "", "   "])
+        if rng.chance(70) { ui.addKeys = rng.pick(["⌘K", "↩", "E"]); ui.addKeyCode = 40 }
+        ui.addSeconds = rng.int(0...5)
+        guard let expected = ui.newStep else { ui.adding = nil; return }   // Add step is disabled while incomplete
+        ui.finishAdding()
+        let after = list == "review" ? ui.draftSteps : ui.editSteps
+        expect(after.count == steps.count + 1 && after[index].intent == expected.intent && after[index].parameters["action"] == expected.parameters["action"]
+               && ui.adding == nil, "steps.add", "Add step inserts exactly that step where it was asked")
+    }
+
+    /// Record this step: a new take replaces just that step.
+    private func rerecordStep(of skill: Skill) async {
+        let ui = app.env.ui, watch = app.env.watch
+        let before = ui.editSteps, index = rng.int(0...(before.count - 1))
+        ui.rerecordStep(index, of: skill, watch: watch)
+        guard watch.isWatching else {
+            expect(ui.replacing == nil, "steps.rerecordBlocked", "if Watch can't start, nothing is replaced"); return
+        }
+        advance(2); advance(2)
+        let taken = watch.actions
+        ui.reviewWatch(watch)
+        await pump(10)
+        let new = StepsFromRecording.steps(from: Recording(id: UUID(), startedAt: Date(), duration: 1, actions: taken, notes: [], video: nil))
+        expect(ui.replacing == nil && ui.page == .skills && !watch.isPresented && ui.editing == skill.id,
+               "steps.rerecordReturns", "after re-recording a step, Edit skill is back")
+        expect(ui.editSteps.count == before.count - 1 + (taken.isEmpty ? 1 : new.count)
+               && Array(ui.editSteps.prefix(index)) == Array(before.prefix(index)), "steps.rerecordReplaces",
+               "only that step is replaced, by the steps of the new take")
+    }
+
+    private func saveEdit(_ skill: Skill) async {
+        let ui = app.env.ui
+        guard ui.canSaveEdit else { return }
+        let expected = ui.edited(skill)
+        ui.saveEdit(of: skill, library: app.env.library)
+        await pump(20)
+        let saved = app.env.library.skills.first { $0.id == skill.id }
+        expect(saved?.definition.steps == expected.definition.steps && saved?.definition.inputs == expected.definition.inputs,
+               "skill.editSaves", "Save changes keeps the edited steps and their values")
     }
 
     private func deleteSkill(_ skill: Skill) async {

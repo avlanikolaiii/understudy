@@ -37,7 +37,7 @@ final class RunController: ObservableObject {
 
     /// Starts `skill`. Returns false, with `problem` set, if it can't run now.
     @discardableResult
-    func start(_ skill: Skill, mode: RunEngine.Mode, from index: Int = 0) -> Bool {
+    func start(_ skill: Skill, mode: RunEngine.Mode, from index: Int = 0, values: [String: String] = [:]) -> Bool {
         problem = nil
         guard !isRunning else { problem = "\(self.skill?.name ?? "Another skill") is running. Stop it first."; return false }
         guard !skill.definition.steps.isEmpty else { problem = "\(skill.name) has no steps to run."; return false }
@@ -45,7 +45,8 @@ final class RunController: ObservableObject {
         self.skill = skill
         self.mode = mode
         let record = library.recorder(for: skill)
-        let engine = RunEngine(steps: skill.definition.steps, mode: mode, performer: performer, startingAt: index, wait: wait) { [weak self] event in
+        let engine = RunEngine(steps: skill.definition.steps, mode: mode, performer: performer, startingAt: index,
+                               values: skill.defaultValues.merging(values) { $1 }, wait: wait) { [weak self] event in
             self?.handle(event, record: record)
         }
         self.engine = engine

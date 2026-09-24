@@ -5,7 +5,13 @@ import UnderstudyCore
 /// buttons for a step that waits for the person (Approve, Skip) or to stop the run.
 struct RunPanelView: View {
     @ObservedObject var runner: RunController
+    @ObservedObject var ui: WorkspaceState
     let skill: Skill
+
+    /// What the person typed for each placeholder, or its default.
+    private var values: [String: String] {
+        Dictionary(uniqueKeysWithValues: skill.variables.map { ($0, ui.runValues["\(skill.id)|\($0)"] ?? skill.defaultValues[$0] ?? "") })
+    }
     var openReceipts: () -> Void
 
     private var showsThisSkill: Bool { runner.skill?.id == skill.id && !runner.results.isEmpty }
@@ -19,10 +25,19 @@ struct RunPanelView: View {
                 Label(problem, systemImage: "exclamationmark.triangle").font(.callout).foregroundStyle(.orange)
                     .fixedSize(horizontal: false, vertical: true)
             }
+            // Values for the skill's {name} placeholders, prefilled with their defaults.
+            ForEach(skill.variables, id: \.self) { name in
+                HStack {
+                    Text("{\(name)}").font(.system(.callout, design: .monospaced)).frame(width: 140, alignment: .leading)
+                    TextField(name, text: Binding(get: { ui.runValues["\(skill.id)|\(name)"] ?? skill.defaultValues[name] ?? "" },
+                                                  set: { ui.runValues["\(skill.id)|\(name)"] = $0 }))
+                        .textFieldStyle(.roundedBorder).frame(maxWidth: 260)
+                }
+            }
             HStack(spacing: 12) {
-                Button { runner.start(skill, mode: .run) } label: { Label("Run now", systemImage: "play.fill") }
+                Button { runner.start(skill, mode: .run, values: values) } label: { Label("Run now", systemImage: "play.fill") }
                     .buttonStyle(.borderedProminent).disabled(runner.isRunning)
-                Button { runner.start(skill, mode: .stepByStep) } label: { Label("Test step by step", systemImage: "forward.frame") }
+                Button { runner.start(skill, mode: .stepByStep, values: values) } label: { Label("Test step by step", systemImage: "forward.frame") }
                     .disabled(runner.isRunning)
                 if runner.isRunning && runner.skill?.id == skill.id {
                     Button("Stop", role: .destructive) { runner.stop() }

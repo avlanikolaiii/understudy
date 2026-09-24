@@ -41,6 +41,7 @@ final class WorkspaceState: ObservableObject {
     }
 
     func reviewWatch(_ watch: WatchSession) {
+        if replacing != nil { return finishReplacing(watch) }
         watch.stop()
         watch.addRule()
         // Copy demo notes once even when the user goes back and reviews again.
@@ -87,11 +88,16 @@ final class WorkspaceState: ObservableObject {
     @Published var editClient = ""
     @Published var editNotes = ""
     @Published var editSteps: [SkillDefinition.Step] = []
+    /// Default values of the skill's `{name}` placeholders.
+    @Published var editDefaults: [String: String] = [:]
+    /// Values typed in the run panel, by skill and placeholder ("id|name").
+    @Published var runValues: [String: String] = [:]
 
     func beginEdit(_ skill: Skill) {
         editing = skill.id
         editName = skill.name; editClient = skill.client
         editNotes = skill.rules; editSteps = skill.definition.steps
+        editDefaults = skill.defaultValues
     }
 
     func cancelEdit() { editing = nil }
@@ -108,7 +114,80 @@ final class WorkspaceState: ObservableObject {
         updated.client = editClient.trimmingCharacters(in: .whitespacesAndNewlines)
         updated.definition.rules = SkillDefinition.Rule.lines(editNotes)
         updated.definition.steps = editSteps
+        // Placeholders keep their defaults as inputs the person is asked for ("ask").
+        updated.definition.inputs = updated.definition.inputs.filter { $0.connector != "ask" }
+            + Variables.names(in: editSteps).map { .init(id: $0, name: $0, connector: "ask", location: editDefaults[$0] ?? "") }
         return updated
+    }
+
+    // MARK: Adding a step by hand
+
+    /// Where a new step goes: the Teach review ("review") or Edit skill ("edit"), before `index`.
+    struct Insertion: Equatable { let list: String; let index: Int }
+
+    @Published var adding: Insertion?
+    @Published var addKind: ManualStep.Kind = .keys
+    @Published var addText = ""
+    @Published var addSeconds = 2
+    /// The app a step acts on (bundle id), from the apps that are open.
+    @Published var addApp = ""
+    @Published var addAppName = ""
+    @Published var addKeys = ""
+    var addKeyCode: Int?
+
+    func beginAdding(to list: String, at index: Int) {
+        adding = Insertion(list: list, index: index)
+        addText = ""; addKeys = ""; addKeyCode = nil; addSeconds = 2
+    }
+
+    /// The step the form describes, or nil while it's incomplete.
+    var newStep: SkillDefinition.Step? {
+        let text = addText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let app = addAppName.isEmpty ? nil : addAppName, bundle = addApp.isEmpty ? nil : addApp
+        switch addKind {
+        case .openApp: return bundle.map { ManualStep.openApp(name: addAppName, bundle: $0) }
+        case .keys: return addKeys.isEmpty ? nil : ManualStep.keys(addKeys, keyCode: addKeyCode, app: app, bundle: bundle)
+        case .type: return text.isEmpty ? nil : ManualStep.type(addText, app: app, bundle: bundle)
+        case .waitText: return text.isEmpty ? nil : ManualStep.waitText(text, app: app, bundle: bundle)
+        case .waitSeconds: return addSeconds > 0 ? ManualStep.waitSeconds(addSeconds) : nil
+        case .openLink: return text.isEmpty ? nil : ManualStep.openLink(text)
+        }
+    }
+
+    func finishAdding() {
+        guard let adding, let step = newStep else { return }
+        if adding.list == "review" { draftSteps.insert(step, at: min(adding.index, draftSteps.count)) }
+        else { editSteps.insert(step, at: min(adding.index, editSteps.count)) }
+        self.adding = nil
+    }
+
+    // MARK: Re-recording one step
+
+    /// While set, the next take replaces this step of the skill being edited.
+    @Published private(set) var replacing: Insertion?
+
+    func rerecordStep(_ index: Int, of skill: Skill, watch: WatchSession) {
+        guard editing == skill.id, editSteps.indices.contains(index), !watch.isWatching, watch.phase != .starting else { return }
+        // A stopped take left open is already saved on disk; close it to record this step.
+        if watch.isPresented { watch.dismiss() }
+        replacing = Insertion(list: "edit", index: index)
+        page = .teach
+        teachingStep = 1
+        watch.start()
+        if !watch.isWatching && watch.phase != .starting { replacing = nil; page = .skills }   // it couldn't start: say why there
+    }
+
+    /// Ends a take started by "Record this step": its steps replace that step.
+    private func finishReplacing(_ watch: WatchSession) {
+        guard let target = replacing else { return }
+        watch.stop()
+        if let recording = watch.recording, !recording.actions.isEmpty, editSteps.indices.contains(target.index) {
+            editSteps.replaceSubrange(target.index...target.index, with: StepsFromRecording.steps(from: recording))
+        }
+        replacing = nil
+        watch.dismiss()
+        teachingStep = 0
+        page = .skills
     }
 
     // MARK: When a skill runs

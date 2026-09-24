@@ -74,6 +74,25 @@ struct StepsChecks {
         precondition(spotify[2].executor == .unsupported && spotify[2].parameters["reveal"] == "com.spotify.client")
         precondition(!spotify.contains { $0.parameters.keys.contains { $0.lowercased().contains("position") || $0 == "x" || $0 == "y" } })
 
+        // Steps added by hand run like recorded ones.
+        let open = ManualStep.openApp(name: "Spotify", bundle: "com.spotify.client")
+        precondition(open.parameters["action"] == "activate" && open.target.app == "com.spotify.client" && open.id.hasPrefix("manual-"))
+        let key = ManualStep.keys("⌘K", keyCode: 40, app: "Superhuman", bundle: nil)
+        precondition(key.parameters["keyCode"] == "40" && key.intent == "Press ⌘K" && !key.effect.needsApproval)
+        precondition(ManualStep.keys("⌘↩", keyCode: nil, app: nil, bundle: nil).effect.needsApproval)
+        precondition(ManualStep.waitText("Bloom", app: "Spotify", bundle: nil).parameters["action"] == "waitText")
+        precondition(ManualStep.waitSeconds(3).parameters["seconds"] == "3" && ManualStep.openLink("spotify:album:x").parameters["link"] == "spotify:album:x")
+        precondition(open.id != ManualStep.openApp(name: "Spotify", bundle: nil).id)
+
+        // Variables: {name} in what a step types or opens, filled when it runs.
+        let steps2 = [ManualStep.type("Hello {client}, week {week}", app: "Mail", bundle: nil), ManualStep.openLink("https://x.test/{client}"),
+                      ManualStep.type("no vars {", app: nil, bundle: nil)]
+        precondition(Variables.names(in: steps2) == ["client", "week"])
+        let filled = Variables.fill(steps2[0], with: ["client": "Norte", "week": "39"])
+        precondition(filled.parameters["text"] == "Hello Norte, week 39" && filled.intent == "Type “Hello Norte, week 39”")
+        precondition(Variables.fill(steps2[1], with: ["week": "1"]).parameters["link"] == "https://x.test/{client}")   // no value: left as written
+        precondition(steps.allSatisfy { $0.parameters["t"] != nil })   // recorded steps know their moment in the video
+
         // Passwords and selections can't be replayed; ⌘↩ sends.
         let other = StepsFromRecording.steps(from: Recording(id: UUID(), startedAt: Date(), duration: 1, actions: [
             A(t: 0, kind: .typing, app: "Safari", element: .init(role: "AXTextField", subrole: "AXSecureTextField"), text: "secret"),
@@ -90,6 +109,6 @@ struct StepsChecks {
         let restored = try! JSONDecoder().decode(SkillDefinition.self, from: JSONEncoder().encode(definition))
         precondition(restored == definition && restored.recording == take.id)
         precondition(StepsFromRecording.steps(from: Recording(id: UUID(), startedAt: Date(), duration: 0, actions: [], notes: [], video: nil)).isEmpty)
-        print("PASS: a real take becomes seven steps, letters outside text fields are key presses, clicks found by element and context (not position), double-clicks, apps that hide their contents, Dock clicks merge, pauses kept, named presses, approval words, unsupported clicks, passwords, selections, recording link")
+        print("PASS: manual steps, variables, a real take becomes seven steps, letters outside text fields are key presses, clicks found by element and context (not position), double-clicks, apps that hide their contents, Dock clicks merge, pauses kept, named presses, approval words, unsupported clicks, passwords, selections, recording link")
     }
 }

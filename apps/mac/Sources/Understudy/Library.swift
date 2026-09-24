@@ -15,6 +15,14 @@ struct Skill: Codable, Identifiable, Equatable {
     /// The person's notes, one per line.
     var rules: String { definition.notes }
 
+    /// The `{name}` placeholders its steps use.
+    var variables: [String] { Variables.names(in: definition.steps) }
+
+    /// Each placeholder's default value, kept in the definition's inputs (connector "ask").
+    var defaultValues: [String: String] {
+        Dictionary(definition.inputs.filter { $0.connector == "ask" }.map { ($0.id, $0.location) }) { first, _ in first }
+    }
+
     static let sample = Skill(name: "Weekly client update", client: "Norte Studio",
                               rules: "Flag missing figures. Keep the summary concise. Wait for my review before sharing.",
                               isSample: true)

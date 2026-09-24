@@ -32,7 +32,8 @@ final class Scheduler: ObservableObject {
     private var timers: [UUID: Timer] = [:]
     private var folders: [UUID: FolderWatch] = [:]
     private var observers: [NSObjectProtocol] = []
-    private var queue: [Skill] = []
+    /// Skills waiting their turn, with the values their trigger gave (e.g. the file that arrived).
+    private var queue: [(skill: Skill, values: [String: String])] = []
     private var countdownTask: Task<Void, Never>?
     private var librarySink: AnyCancellable?
 
@@ -97,7 +98,9 @@ final class Scheduler: ObservableObject {
                 arm(skill)
             case .fileAdded:
                 if folders[skill.id]?.path != trigger.folder, let path = trigger.folder {
-                    folders[skill.id] = FolderWatch(path: path) { [weak self] in self?.fire(skill) }
+                    folders[skill.id] = FolderWatch(path: path) { [weak self] file in
+                        self?.fire(skill, values: ["file": (path as NSString).appendingPathComponent(file), "fileName": file])
+                    }
                 }
             case .appOpened, .manual:
                 break
@@ -116,9 +119,10 @@ final class Scheduler: ObservableObject {
     }
 
     /// A trigger fired: queue the skill, and start it when nothing else is running.
-    func fire(_ skill: Skill) {
-        guard !queue.contains(where: { $0.id == skill.id }), pending?.id != skill.id, runner.skill?.id != skill.id || !runner.isRunning else { return }
-        queue.append(skill)
+    func fire(_ skill: Skill, values: [String: String] = [:]) {
+        guard !queue.contains(where: { $0.skill.id == skill.id }), pending?.id != skill.id,
+              runner.skill?.id != skill.id || !runner.isRunning else { return }
+        queue.append((skill, values))
         startNext()
     }
 
@@ -145,7 +149,7 @@ final class Scheduler: ObservableObject {
 
     private func startNext() {
         guard pending == nil, !runner.isRunning, !queue.isEmpty else { return }
-        let skill = queue.removeFirst()
+        let (skill, values) = queue.removeFirst()
         pending = skill
         countdownTask = Task { [weak self] in
             guard let self else { return }
@@ -165,7 +169,7 @@ final class Scheduler: ObservableObject {
                 if self.runner.isRunning || self.busy() {
                     self.pending = nil
                     self.countdownTask = nil
-                    self.queue.insert(skill, at: 0)
+                    self.queue.insert((skill, values), at: 0)
                     self.activity.hideCountdown()
                     return self.waitForRunThenNext()
                 }
@@ -176,7 +180,7 @@ final class Scheduler: ObservableObject {
             self.pending = nil
             self.countdownTask = nil
             self.markRun(skill)
-            if !self.runner.start(skill, mode: .run) {
+            if !self.runner.start(skill, mode: .run, values: values) {
                 // E.g. Watch is recording, or Accessibility is off: say so instead of failing silently.
                 self.activity.showRunProblem(skill.name, reason: self.runner.problem ?? "It couldn't start.")
             }
@@ -195,15 +199,15 @@ final class Scheduler: ObservableObject {
     private func markRun(_ skill: Skill) { defaults.set(now(), forKey: "lastRun.\(skill.id)") }
 }
 
-/// Watches a folder and calls `added` when a new visible file appears in it.
+/// Watches a folder and calls `added` with the name of each new visible file in it.
 @MainActor
 final class FolderWatch {
     let path: String
     private var source: DispatchSourceFileSystemObject?
     private var known: Set<String>
-    private let added: () -> Void
+    private let added: (String) -> Void
 
-    init(path: String, added: @escaping () -> Void) {
+    init(path: String, added: @escaping (String) -> Void) {
         self.path = path
         self.added = added
         known = Self.files(in: path)
@@ -225,7 +229,7 @@ final class FolderWatch {
         let now = Self.files(in: path)
         let new = now.subtracting(known)
         known = now
-        if !new.isEmpty { added() }
+        new.sorted().forEach(added)
     }
 
     static func files(in path: String) -> Set<String> {

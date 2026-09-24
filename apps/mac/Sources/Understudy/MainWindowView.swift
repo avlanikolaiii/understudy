@@ -1,4 +1,5 @@
 import SwiftUI
+import UnderstudyCore
 
 /// The one main window: teaching, skills, receipts, and the account. The notch is its live companion.
 struct MainWindowView: View {
@@ -128,6 +129,10 @@ struct MainWindowView: View {
                 primary(watch.isPresented ? "Resume Watch" : "Start Watch", symbol: "record.circle") { ui.startWatch(watch) }
                     .disabled(ui.skillName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || ui.clientName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             } else if ui.teachingStep == 1 {
+                if let replacing = ui.replacing {
+                    Label("Recording a new version of step \(replacing.index + 1). Stop when you're done; it replaces that step.",
+                          systemImage: "record.circle").font(.callout.weight(.semibold)).foregroundStyle(Color.accentColor)
+                }
                 WorkspaceWatchView(session: watch, onReview: { ui.reviewWatch(watch) })
                 Button("Back to description") { ui.teachingStep = 0 }
             } else {
@@ -144,7 +149,8 @@ struct MainWindowView: View {
                     Text("Understudy replays these steps exactly as you did them, without the mouse. Delete anything you don't want, like switching back to Understudy.")
                         .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                     StepListView(steps: ui.draftSteps, edits: StepEdits(delete: ui.deleteStep, moveUp: ui.moveStepUp,
-                                                                        retype: { ui.setTypedText($0, at: $1) }))
+                                                                        retype: { ui.setTypedText($0, at: $1) }, ui: ui, list: "review"),
+                                 recording: ui.draftRecording)
                 }
                 detail("YOUR NOTES", ui.rules.isEmpty ? "No additional notes." : ui.rules)
                 HStack {
@@ -192,12 +198,12 @@ struct MainWindowView: View {
             if ui.editing == activeSkill.id {
                 editForm(activeSkill)
             } else if !activeSkill.definition.steps.isEmpty {
-                RunPanelView(runner: runner, skill: activeSkill, openReceipts: { ui.selectedReceipt = runner.lastReceipt; ui.page = .results })
+                RunPanelView(runner: runner, ui: ui, skill: activeSkill, openReceipts: { ui.selectedReceipt = runner.lastReceipt; ui.page = .results })
                 TriggerEditorView(ui: ui, scheduler: scheduler, skill: activeSkill) { trigger in
                     ui.saveTrigger(trigger, of: activeSkill, library: library)
                 }
                 Text("Steps").font(.system(size: 17, weight: .semibold))
-                StepListView(steps: activeSkill.definition.steps)
+                StepListView(steps: activeSkill.definition.steps, recording: activeSkill.definition.recording)
                 if let latest = watch.latestRecording(), latest.id != activeSkill.definition.recording {
                     HStack {
                         Button("Use latest recording (\(latest.startedAt.formatted(date: .omitted, time: .shortened)))") {
@@ -229,12 +235,23 @@ struct MainWindowView: View {
                 .background(Color(nsColor: .textBackgroundColor), in: RoundedRectangle(cornerRadius: 8))
                 .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color(nsColor: .separatorColor)))
                 .accessibilityLabel("Skill notes")
-            if !ui.editSteps.isEmpty {
-                Text("Steps").font(.system(size: 13, weight: .semibold))
-                StepListView(steps: ui.editSteps, edits: StepEdits(
-                    delete: { WorkspaceState.deleteStep(at: $0, in: &ui.editSteps) },
-                    moveUp: { WorkspaceState.moveStepUp(at: $0, in: &ui.editSteps) },
-                    retype: { WorkspaceState.setTypedText($0, at: $1, in: &ui.editSteps) }))
+            Text("Steps").font(.system(size: 13, weight: .semibold))
+            StepListView(steps: ui.editSteps, edits: StepEdits(
+                delete: { WorkspaceState.deleteStep(at: $0, in: &ui.editSteps) },
+                moveUp: { WorkspaceState.moveStepUp(at: $0, in: &ui.editSteps) },
+                retype: { WorkspaceState.setTypedText($0, at: $1, in: &ui.editSteps) },
+                ui: ui, list: "edit", rerecord: { ui.rerecordStep($0, of: skill, watch: watch) }),
+                recording: skill.definition.recording)
+            let variables = Variables.names(in: ui.editSteps)
+            if !variables.isEmpty {
+                Text("Values asked when it runs").font(.system(size: 13, weight: .semibold))
+                ForEach(variables, id: \.self) { name in
+                    HStack {
+                        Text("{\(name)}").font(.system(.callout, design: .monospaced)).frame(width: 140, alignment: .leading)
+                        TextField("Default", text: Binding(get: { ui.editDefaults[name] ?? "" }, set: { ui.editDefaults[name] = $0 }))
+                            .textFieldStyle(.roundedBorder).frame(maxWidth: 260)
+                    }
+                }
             }
             HStack {
                 Button("Cancel") { ui.cancelEdit() }
