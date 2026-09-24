@@ -13,7 +13,8 @@ struct NotchRow: Identifiable, Equatable {
 }
 
 /// What the notch shows. It follows the landing page's story: Watching → New skill →
-/// Rehearsing (read-only) → Receipt. Everything shown here is simulated and says so.
+/// Rehearsing (read-only) → Receipt. Watching shows what is really being recorded; the states
+/// after it are still simulated and say so.
 @MainActor
 final class NotchActivity: ObservableObject {
     enum Mode: Equatable { case idle, watching, stopped, learned, rehearsing, receipt, demo }
@@ -33,7 +34,7 @@ final class NotchActivity: ObservableObject {
     private let watch: WatchSession
     private var bag = Set<AnyCancellable>()
     private var watchLog: [NotchRow] = []
-    private var loggedSteps = 0
+    private var loggedActions = 0
     private var loggedRules = 0
     private var lastPhase: WatchSession.Phase = .idle
     private var overlayActive = false
@@ -46,7 +47,7 @@ final class NotchActivity: ObservableObject {
     init(watch: WatchSession, sleep: @escaping (Double) async -> Void = { try? await Task.sleep(nanoseconds: UInt64($0 * 1_000_000_000)) }) {
         self.watch = watch
         self.sleep = sleep
-        Publishers.CombineLatest3(watch.$phase, watch.$elapsedSeconds, watch.$rules)
+        Publishers.CombineLatest4(watch.$phase, watch.$elapsedSeconds, watch.$rules, watch.$actions)
             .receive(on: RunLoop.main)
             .sink { [weak self] _ in self?.watchChanged() }
             .store(in: &bag)
@@ -64,21 +65,24 @@ final class NotchActivity: ObservableObject {
         }
     }
 
-    // MARK: Watch (simulated replay)
+    // MARK: Watch
+
+    /// Shown under every Watch state: what is recorded, and where it stays.
+    static let watchFooter = "Recording on this Mac · passwords are never recorded"
 
     func watchChanged() {
         let phase = watch.phase
-        if phase == .playing && lastPhase != .playing {
-            // A new or replayed Watch always takes over the notch.
+        if phase == .watching && lastPhase != .watching {
+            // A new recording always takes over the notch.
             cancelOverlay()
             watchLog = watch.rules.map { ruleRow($0) }
-            loggedSteps = 0
+            loggedActions = 0
             loggedRules = watch.rules.count
         }
-        while loggedSteps < watch.completedSteps {
-            let step = WatchSession.steps[loggedSteps]
-            watchLog.append(row(step.app, step.noted, end: "✓", endTone: .ok))
-            loggedSteps += 1
+        while loggedActions < watch.actions.count {
+            let action = watch.actions[loggedActions]
+            watchLog.append(row(action.app, action.summary))
+            loggedActions += 1
         }
         while loggedRules < watch.rules.count {
             watchLog.append(ruleRow(watch.rules[loggedRules]))
@@ -88,14 +92,14 @@ final class NotchActivity: ObservableObject {
         guard !overlayActive else { return }
 
         switch phase {
-        case .idle:
+        case .idle, .starting:
             show(.idle, label: "", meta: "", rows: [], footer: "")
-        case .playing:
-            show(.watching, label: "Watching", detail: "Weekly client update", meta: Self.clock(watch.elapsedSeconds),
-                 dot: .pulse, rows: watchLog, footer: "Simulated replay · nothing is recorded")
-        case .stopped, .finished:
-            show(.stopped, label: phase == .finished ? "Replayed" : "Stopped", detail: "Review it in Understudy",
-                 meta: Self.clock(watch.elapsedSeconds), rows: watchLog, footer: "Simulated replay · nothing is recorded")
+        case .watching:
+            show(.watching, label: "Watching", detail: "Do the task as you usually do", meta: Self.clock(watch.elapsedSeconds),
+                 dot: .pulse, rows: watchLog, footer: Self.watchFooter)
+        case .stopped:
+            show(.stopped, label: "Stopped", detail: "Review it in Understudy",
+                 meta: Self.clock(watch.elapsedSeconds), rows: watchLog, footer: Self.watchFooter)
         }
     }
 
@@ -104,7 +108,7 @@ final class NotchActivity: ObservableObject {
     func showLearned(_ skill: Skill) {
         let token = beginOverlay()
         let notes = skill.rules.split(whereSeparator: \.isNewline).count
-        show(.learned, label: "New skill", detail: skill.name, meta: "\(WatchSession.steps.count) steps", rows: [
+        show(.learned, label: "New skill", detail: skill.name, meta: "3 steps", rows: [
             row("Sheet", "→ read the week's figures", end: "✓", endTone: .ok),
             row("Report", "→ fill your template", end: "✓", endTone: .ok),
             row("Missing", "→ flag it, never guess", end: "✓", endTone: .ok),

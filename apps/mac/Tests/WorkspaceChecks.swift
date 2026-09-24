@@ -2,18 +2,21 @@ import Foundation
 
 @main struct WorkspaceChecks {
     @MainActor static func main() {
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent("understudy-workspace-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: folder) }
         var time: TimeInterval = 0
-        let watch = WatchSession(now: { time })
+        let capture = ScriptedCapture()
+        let watch = WatchSession(source: capture, folder: folder, now: { time })
         let ui = WorkspaceState()
         ui.startWatch(watch)
-        precondition(ui.page == .teach && ui.teachingStep == 1 && watch.isPlaying)
-        time = 7; watch.advance()
+        precondition(ui.page == .teach && ui.teachingStep == 1 && watch.isWatching)
+        time = 7; watch.advance(); capture.emitNext()
         watch.ruleDraft = "Keep figures unchanged"
         // Reopening the app's flow must not restart the shared notch session.
         ui.startWatch(watch)
-        precondition(watch.elapsedSeconds == 7 && watch.completedSteps == 1)
+        precondition(watch.elapsedSeconds == 7 && watch.actions.count == 1)
         ui.reviewWatch(watch)
-        precondition(!watch.isPlaying && ui.teachingStep == 2)
+        precondition(!watch.isWatching && ui.teachingStep == 2)
         precondition(ui.rules.contains("Keep figures unchanged"))
         let notes = ui.rules
         ui.reviewWatch(watch)

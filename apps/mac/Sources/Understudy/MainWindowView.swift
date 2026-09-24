@@ -65,14 +65,14 @@ struct MainWindowView: View {
             ToolbarItemGroup(placement: .primaryAction) {
                 Button { ui.showTeaching(watch: watch) } label: {
                     Label("Teach a skill", systemImage: "plus")
-                }.help("Start or resume the simulated teaching flow")
+                }.help("Start or resume teaching a skill")
                 Button(action: openSettings) {
                     Label("Settings", systemImage: "gearshape")
                 }.help("Change keyboard shortcut")
             }
         }
         .onReceive(watch.$phase) { phase in
-            if phase == .playing { ui.page = .teach; ui.teachingStep = 1 }
+            if phase == .watching { ui.page = .teach; ui.teachingStep = 1 }
         }
     }
 
@@ -82,7 +82,7 @@ struct MainWindowView: View {
             VStack(alignment: .leading, spacing: 18) {
                 HStack { badge("START HERE"); Spacer(); Image(systemName: "sparkles").foregroundStyle(Color.accentColor) }
                 Text("Show it once. Then hand it off.").font(.title.weight(.semibold))
-                Text("Walk through a weekly client report with fictional campaign data. Nothing is recorded, connected, or sent.")
+                Text("Do a task once while Understudy records your screen and notes each step. Rehearsals and receipts still use fictional sample data, and nothing is connected or sent.")
                     .font(.system(size: 14)).foregroundStyle(Color.secondary).fixedSize(horizontal: false, vertical: true)
                 HStack {
                     primary("Teach a skill", symbol: "record.circle") { ui.showTeaching(watch: watch) }
@@ -97,7 +97,7 @@ struct MainWindowView: View {
                 stat("0", "Connected apps", "link")
             }
             Text("A handoff you can inspect").font(.system(size: 17, weight: .semibold))
-            step("1", "Show your process", "Explore a sample demonstration and save your workflow notes.")
+            step("1", "Show your process", "Record the task once while Understudy watches, and add notes as you go.")
             step("2", "Try a different case", "Switch between complete inputs and a missing figure.")
             step("3", "See what happened", "Read the sample report, its status, and the limits of its evidence.")
         }
@@ -105,7 +105,7 @@ struct MainWindowView: View {
 
     private var teach: some View {
         VStack(alignment: .leading, spacing: 22) {
-            title("Teach a skill", "Start Watch here or from the notch. This prototype replays a predefined example.")
+            title("Teach a skill", "Start Watch here or from the notch, then do the task as you usually do. Learning from the recording comes next; the review below uses a sample procedure.")
             HStack {
                 ForEach(0..<3) { i in
                     Text(["1  Describe", "2  Show", "3  Review"][i])
@@ -121,18 +121,21 @@ struct MainWindowView: View {
                     .background(Color(nsColor: .textBackgroundColor), in: RoundedRectangle(cornerRadius: 8))
                     .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color(nsColor: .separatorColor)))
                     .accessibilityLabel("Workflow notes")
-                Text("These notes are stored locally. The prototype does not interpret or enforce custom rules.")
+                Text("Notes are saved with the skill. They aren't applied yet.")
                     .font(.system(size: 12)).foregroundStyle(Color.secondary)
-                primary(watch.isPresented ? "Resume Watch demo" : "Start Watch demo", symbol: "record.circle") { ui.startWatch(watch) }
+                primary(watch.isPresented ? "Resume Watch" : "Start Watch", symbol: "record.circle") { ui.startWatch(watch) }
                     .disabled(ui.skillName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || ui.clientName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             } else if ui.teachingStep == 1 {
                 WorkspaceWatchView(session: watch, onReview: { ui.reviewWatch(watch) })
                 Button("Back to description") { ui.teachingStep = 0 }
             } else {
-                badge("SAMPLE SKILL · NOT AI-GENERATED")
+                badge("SAMPLE PROCEDURE · NOT LEARNED FROM YOUR RECORDING YET")
                 field("Skill name", text: $ui.skillName)
                 field("Client or project", text: $ui.clientName)
                 detail("PROCEDURE", "Read sample figures → fill the report → flag missing data → wait for review")
+                if let recording = watch.recording {
+                    detail("YOUR RECORDING", "\(recording.actions.count) actions over \(Int(recording.duration.rounded())) seconds\(recording.video == nil ? "" : ", with screen video"). Saved on this Mac.")
+                }
                 detail("YOUR NOTES", ui.rules.isEmpty ? "No additional notes." : ui.rules)
                 HStack {
                     Button("Back") { ui.teachingStep = 1 }

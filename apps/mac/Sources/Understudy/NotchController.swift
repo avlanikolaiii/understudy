@@ -59,6 +59,8 @@ final class NotchController: NSObject {
         panel.isMovable = false
         panel.hidesOnDeactivate = false
         panel.setAccessibilityLabel("Understudy")
+        // Keep the strip out of Watch's screen recording: it shows the recording, not the task.
+        panel.sharingType = .none
 
         handleTap = { [weak activity] in
             guard let activity else { return }
