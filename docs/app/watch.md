@@ -1,62 +1,42 @@
-# Watch in the notch: simulated
+# Watch: recording a demonstration
 
-> **Update 2026-09-23 (Claude Code):** the notch no longer drops down a panel. It is now the landing page's live strip (see `interface-prototype.md`). The shortcut starts Watch, and pressing it again stops and opens the review in the main window. Rules are typed in the main window's Watch view. The steps below that mention notch buttons (Stop, Replay, Done, Add rule) now live in the main window.
+Watch records one demonstration of a task: a video of the screen and a log of what the person did. Learning (phase 3 of the plan) reads the recording; until then, the review step uses a sample procedure and says so.
 
-This slice replays five predefined steps based on the Phase A teaching script in
-`docs/research/capture-experiment.md`. It does not read capture logs, record the screen,
-learn a skill, access connected apps, or read evaluation data. The timer and
-interaction are real; the displayed workflow is simulated.
+## What it records
 
-## Try it
+| | How | Where |
+|---|---|---|
+| Screen video | ScreenCaptureKit, 10 frames per second, HEVC, longer side at most 1920 px. The person picks a display, window, or app in macOS's own picker, so Understudy never holds blanket Screen Recording access, and macOS shows its recording indicator. | `screen.mov` |
+| App switches | `NSWorkspace` activation, with the front window's title | `recording.json` |
+| Clicks | A global mouse monitor, plus the Accessibility element under the pointer, walked up to the control a person would name (button, menu item, cell, field): role, title, description, identifier | `recording.json` |
+| Typing | Keystrokes grouped into one action per field (after a 1.5 s pause, Return, Tab, an arrow key, a click, or a switch), with the field and its value afterwards | `recording.json` |
+| Shortcuts | ⌘ and ⌃ combinations, e.g. `⌘C` | `recording.json` |
+| Spreadsheet selections | Selected cells of an Accessibility table in the front window, as `D5=1200 E5=48` | `recording.json` |
 
-1. Run `apps/mac/scripts/bundle.sh`, then open `apps/mac/build/Understudy.app`.
-2. Press your configured shortcut (Option-Space by default), click the notch, or choose **Open Understudy** from the menu bar.
-3. Choose **Watch a new task**, labeled **Simulated**. No account setup is needed.
-4. Watch the pulsing dot, elapsed timer, and five steps advance every five seconds.
-5. Enter a rule and press Return or **Add**. Blank rules are ignored. Notes stay in
-   memory for this session and are not interpreted or saved as a skill.
-6. Choose **Stop** partway through. The timer freezes; only finished steps have
-   checkmarks. Any unsubmitted rule is retained. **Replay** restarts the clock
-   while keeping rules; **Done** returns to the panel home.
-7. Let a replay finish: at 25 seconds it says **Replay complete**. It does not
-   claim to have learned a skill or start the next slice.
+Each recording is its own folder in `~/Library/Application Support/Understudy/recordings/<id>/`. `recording.json` (format `Recording` v1 in `UnderstudyCore`) holds the actions on the video's clock, the notes, and the duration. Nothing is uploaded.
 
-The configured shortcut stops an active replay and shows its partial result. Clicking the
-collapsed notch during playback does the same. This follows the original
-teaching interaction described in the Claude conversation.
+**Not recorded:** anything typed into a password field (by role, `AXSecureTextField`; macOS also withholds keystrokes while secure input is on), and anything done inside Understudy itself. The notch strip is excluded from the video.
 
-The main app's **Teach a skill → Start Watch demo** starts the same session.
-Both surfaces share its timer, progress, and notes. In the app, **Review sample
-skill** carries the notes into the local sample review. This is still a predefined
-example, not recorded or learned behavior.
+## Permissions
 
-Collapsing the panel with Escape, the close control, or clicking away leaves the
-replay running. The menu-bar **Open Understudy** item reopens it for inspection.
-The collapsed notch dot pulses during playback. Reduced Motion uses a steady dot. A new Watch session
-after **Done**, or quitting the app, clears these temporary notes.
+- **Accessibility**, checked when Watch starts. Without it, Watch doesn't start: the Teach step says why and offers **Open Accessibility Settings**, and macOS shows its own prompt once.
+- **Screen**: chosen per recording in macOS's picker. Cancelling the picker cancels Watch.
 
-Change the shortcut through the notch gear or the menu-bar **Keyboard Shortcut…** item. See `docs/app/keyboard-shortcuts.md`.
+Builds signed with the fixed identity (`apps/mac/scripts/make-signing-identity.sh`) keep the Accessibility grant across builds; ad-hoc builds lose it every build.
 
-## Check the session behavior
+## Using it
 
-From the repository root:
+1. **Teach a skill** → name and client → **Start Watch**, or press the shortcut (⌥ Space by default) from anywhere.
+2. Pick what to record in macOS's picker.
+3. Do the task as usual. The notch shows **Watching** with the latest steps; the Teach page lists them with their times. Add notes at any point.
+4. Stop with **Stop Watch**, the shortcut, or by clicking the notch. **Record again** starts a new take and keeps the notes; **Review** carries the notes into the review.
 
-```sh
-swiftc apps/mac/Sources/Understudy/WatchSession.swift apps/mac/Tests/WatchChecks.swift -o /tmp/understudy-watch-checks
-/tmp/understudy-watch-checks
-```
+## Tests
 
-This checks timer progression and cancellation, exact step boundaries, Stop,
-automatic completion, blank/trimmed rules, pending-rule retention, replay, and
-fresh-session reset. Visual and keyboard checks still require opening the app.
+The capture source is replaceable. `ScriptedCapture` stands in for the screen in the checks and the self-test (it emits the teaching script's five actions and can fail as a missing permission would); `ScreenCapture` is used on a real Mac.
 
-## Verification on 2026-09-23
+- `WatchChecks`: start failure, actions on Watch's clock, Stop saves the recording and notes, record again, reset, password redaction, the live timer.
+- `NotchChecks`: the Watching strip shows the recorded actions in order and says it records on this Mac.
+- Self-test: Watch runs with permission turned off and on at random; Watch shows a problem only when idle, and a stopped Watch has saved its actions and notes.
 
-- Release bundle built with `apps/mac/scripts/bundle.sh`; bundle signature and plist checks passed.
-- Session checks passed, including the live timer and cancellation after Stop.
-- Rendered the actual Watch view at 420 points wide in playing, stopped, and
-  completed states. Inspected labels, progress, rules, and controls; corrected
-  primary-button contrast for an inactive panel.
-- The rebuilt app launched. Full notch interaction, the global shortcut,
-  Reduced Motion, and the no-notch fallback were not verified end to end.
-  Native UI inspection was interrupted by window-state changes.
+Real capture needs a person at a Mac with the permissions granted, so it is verified by hand; see the checklist in the pull request that introduced it.

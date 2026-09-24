@@ -14,15 +14,15 @@ This is a clickable native Mac app. It is not a working demonstration-learning e
 
 Build from the project root with `apps/mac/scripts/bundle.sh`, then open `apps/mac/build/Understudy.app`.
 
-The main window opens at launch. Reopen it from the menu-bar icon with **Open Understudy**, or click the notch. The configurable global shortcut (Option-Space by default) starts or stops the simulated Watch. The workspace has a Dock entry, standard app menus, a native sidebar and toolbar, and follows the system appearance.
+The main window opens at launch. Reopen it from the menu-bar icon with **Open Understudy**, or click the notch. The configurable global shortcut (Option-Space by default) starts or stops Watch. The workspace has a Dock entry, standard app menus, a native sidebar and toolbar, and follows the system appearance.
 
 ## Try it
 
 1. Choose **Teach a skill** in the toolbar or Home, or press **Command-N**.
-2. Enter a task name, client, and notes. Choose **Start Watch demo**.
-3. Watch the predefined five-step replay. Add a note, stop or let it finish,
-   then choose **Review sample skill**. Review/edit the name, client, and carried
-   notes, then save the local sample skill.
+2. Enter a task name, client, and notes. Choose **Start Watch** and pick what to record.
+3. Do the task. Watch lists each recorded step (see `watch.md`). Add a note, stop,
+   then choose **Review**. The review shows the recording's size and a sample procedure
+   (learning from the recording comes next); edit the name, client, and notes, then save.
 4. Choose **Complete sample**, then **Rehearse sample**. Inspect the receipt and expand the report.
 5. Choose **Try another case**, select **Missing ad spend**, and rehearse again. Total spend and cost per lead remain missing. The report is an incomplete draft.
 6. Optionally export Markdown to a local location you select. The app reads the saved file back and compares its contents with the sample report.

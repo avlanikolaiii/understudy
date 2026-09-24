@@ -14,7 +14,7 @@ In development, not yet available to users.
 
 | Area | State |
 |---|---|
-| Mac app | Clickable prototype: main window, a live notch strip, accounts, and Sample mode. Watching, learning, and rehearsal are **simulated**. |
+| Mac app | Main window, a live notch strip, accounts, and Sample mode. **Watch records for real** (screen video and actions, on the Mac). Learning and rehearsal are still **simulated**. |
 | Report engine | Real `Decimal` math that follows the report spec and matches the sample weeks exactly. Not wired into the app yet. |
 | Accounts | Supabase project live, with email sign-in. Google and Apple sign-in are not configured yet. |
 | Website | Pre-launch site with an early-access waitlist, deployed on Vercel. |
@@ -93,7 +93,7 @@ The full list is in [AGENTS.md](AGENTS.md#build-and-test), and every pull reques
 
 - [Product context](docs/product/product-context.md): what Understudy is, the decisions behind it, and open questions
 - [Prototype scope](docs/product/prototype-1.md) and the [report spec](docs/product/report-spec.md)
-- [Mac app guide](docs/app/interface-prototype.md), [Watch](docs/app/watch-slice.md), [keyboard shortcuts](docs/app/keyboard-shortcuts.md), [report engine](docs/app/report-engine.md)
+- [Mac app guide](docs/app/interface-prototype.md), [Watch](docs/app/watch.md), [keyboard shortcuts](docs/app/keyboard-shortcuts.md), [report engine](docs/app/report-engine.md)
 - [Long-term plan](docs/product/long-term-plan.md): what is temporary today, the target architecture, and the roadmap
 - [Accounts setup](docs/setup/accounts.md)
 - QA: `python3 qa/run.py` runs every suite and writes `qa/out/report.html` (see [AGENTS.md](AGENTS.md#qa-and-evals))

@@ -9,7 +9,7 @@ All notable changes to this project are recorded here. The format follows
 - A single app with two surfaces: the main window (Home, Teach a skill, Skills, Receipts, Account) and a live strip in the notch that is styled and animated like the website's hero demo.
 - One data layer (`SkillLibrary`). **Sample mode** stores skills and receipts on the Mac before sign-in. After sign-in, the Supabase account stores them.
 - Supabase Auth with Google, Apple, and email-link sign-in (PKCE, `understudy://auth-callback`). Email sign-in is configured; Google and Apple are not yet.
-- Simulated Watch: a predefined five-step replay with a timer, notes, stop, and replay. It is shared between the notch and the main window.
+- **Watch records for real:** a screen video (ScreenCaptureKit, through macOS's picker) and an action log (apps, clicked controls, typed text per field, shortcuts, spreadsheet selections) through Accessibility. Recordings stay on the Mac; password fields are never recorded. Without Accessibility access, Watch says why and links to the setting. It replaces the predefined five-step replay and is shared between the notch and the main window.
 - Simulated rehearsal and receipts for a complete week and a week with missing ad spend. Markdown export reads the file back after writing it.
 - A configurable global shortcut (default ⌥ Space) with a native recorder.
 - `ReportEngine`: a pure-Foundation weekly report with `Decimal` math and half-up rounding that follows `docs/product/report-spec.md`. It matches teaching weeks 1–3 exactly and is not wired into the app yet.
