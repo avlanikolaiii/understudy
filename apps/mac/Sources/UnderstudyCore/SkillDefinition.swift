@@ -65,17 +65,6 @@ public struct SkillDefinition: Codable, Equatable, Sendable {
 }
 
 extension SkillDefinition {
-    /// When the skill runs. Scheduled runs come later.
-    public struct Trigger: Codable, Equatable, Sendable {
-        public enum Kind: String, Codable, Sendable { case manual }
-        public var kind: Kind
-        /// In plain words, e.g. "Every Monday, when the week's figures are in".
-        public var detail: String
-
-        public init(kind: Kind, detail: String) { self.kind = kind; self.detail = detail }
-        public static let manual = Trigger(kind: .manual, detail: "When you start it")
-    }
-
     /// Something the skill reads, e.g. a sheet through a connector or a file on this Mac.
     public struct Input: Codable, Equatable, Sendable, Identifiable {
         public var id: String
