@@ -90,7 +90,8 @@ def run_eval():
 
 
 # The sources each agent-run suite tests. A saved result counts only while these are unchanged.
-AGENT_SOURCES = {"browser": ["apps/web/src", "qa/browser-sessions.js"], "db": ["supabase/migrations", "qa/db-waitlist.sql"]}
+AGENT_SOURCES = {"browser": ["apps/web/src", "apps/web/build.mjs", "apps/web/vercel.json", "qa/browser-sessions.js"],
+                 "db": ["supabase/migrations", "qa/db-waitlist.sql"]}
 
 
 def fingerprint(name):
@@ -117,7 +118,7 @@ def agent_suite(name):
     return result
 
 
-def coverage(flows, suites):
+def coverage(flows, suites, partial=False):
     visited = {}
     for run in suites["self-test"]["runs"]:
         for node, count in run["nodes"].items():
@@ -146,9 +147,9 @@ def coverage(flows, suites):
             elif suite == "eval":
                 e = suites["eval-holdout"]
                 s = "pass" if e["total"] and e["passed"] == e["total"] else "fail"
-            else:  # browser, db: run by an agent; absent means not run this time
+            else:  # browser, db: run by an agent. Absent is a gap in a full run, a skip in a partial one.
                 agent = suites.get(suite)
-                s = "skipped" if not agent else ("pass" if nid in agent.get("passedNodes", []) else "fail" if nid in agent.get("failedNodes", []) else "missed")
+                s = ("skipped" if partial else "missed") if not agent else ("pass" if nid in agent.get("passedNodes", []) else "fail" if nid in agent.get("failedNodes", []) else "missed")
             status[nid] = s
     edges_taken = {}
     for run in suites["self-test"]["runs"]:
@@ -292,7 +293,7 @@ def main():
     suites = {name: (run() if not only or name in only else skipped(name)) for name, run in runners.items()}
     suites.update({"browser": agent_suite("browser"), "db": agent_suite("db")})
     flows = json.loads((ROOT / "qa/flows.json").read_text())
-    status, edges_taken = coverage(flows, suites)
+    status, edges_taken = coverage(flows, suites, partial=bool(only))
     automated = [v for v in status.values() if v not in ("manual", "skipped")]
     commit = subprocess.run(["git", "rev-parse", "--short", "HEAD"], cwd=ROOT, capture_output=True, text=True).stdout.strip()
     summary = {
@@ -313,6 +314,8 @@ def main():
     # The gate: every suite that ran (including loaded agent suites) passed, and no automated node
     # of a suite that ran is failing or unreached.
     failed = [k for k, v in suites.items() if v and not v.get("skipped") and v["passed"] != v["total"]]
+    if not only:
+        failed += [f"{k} (not run)" for k in AGENT_SOURCES if suites.get(k) is None]
     uncovered = [n for n, v in status.items() if v in ("fail", "missed")]
     if uncovered:
         failed.append(f"coverage ({len(uncovered)} nodes: {', '.join(uncovered[:8])})")
