@@ -54,7 +54,9 @@ extension WorkspaceState {
     /// Also "Use latest recording" for a skill that has steps: a new take replaces its steps,
     /// keeping its notes and when it runs.
     func addStepsFromLatestRecording(to skill: Skill, library: SkillLibrary, watch: WatchSession) {
-        guard !skill.isSample, let recording = watch.latestRecording(), recording.id != skill.definition.recording else { return }
+        // A newer take replaces the steps; a skill left with no steps can always get them back.
+        guard !skill.isSample, let recording = watch.latestRecording(),
+              recording.id != skill.definition.recording || skill.definition.steps.isEmpty else { return }
         var updated = skill
         updated.definition.steps = StepsFromRecording.steps(from: recording)
         updated.definition.recording = recording.id
