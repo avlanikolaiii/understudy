@@ -6,7 +6,7 @@ A Mac companion that learns a recurring task from one demonstration, rehearses i
 
 | Path | What's there |
 |---|---|
-| `app/` | Native SwiftUI app: main window, notch strip, Sample mode + Supabase account |
+| `apps/mac/` | Native SwiftUI app: main window, notch strip, Sample mode + Supabase account |
 | `AGENTS.md`, `CLAUDE.md`, `docs/worklog.md` | Shared rules and work log for Codex and Claude Code |
 | `docs/interface-prototype.md` | What works, what is simulated, and how to try it |
 | `docs/prototype-1.md` | Approved scope, proposed pass/fail criteria, milestones |

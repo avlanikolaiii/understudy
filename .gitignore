@@ -24,6 +24,6 @@ tools/ax-capture/ax-capture
 .DS_Store
 
 # App build products and local config
-app/.build/
-app/build/
-app/config.local.json
+apps/mac/.build/
+apps/mac/build/
+apps/mac/config.local.json

@@ -9,7 +9,7 @@ interaction are real; the displayed workflow is simulated.
 
 ## Try it
 
-1. Run `app/scripts/bundle.sh`, then open `app/build/Understudy.app`.
+1. Run `apps/mac/scripts/bundle.sh`, then open `apps/mac/build/Understudy.app`.
 2. Press your configured shortcut (Option-Space by default), click the notch, or choose **Open Understudy** from the menu bar.
 3. Choose **Watch a new task**, labeled **Simulated**. No account setup is needed.
 4. Watch the pulsing dot, elapsed timer, and five steps advance every five seconds.
@@ -42,7 +42,7 @@ Change the shortcut through the notch gear or the menu-bar **Keyboard Shortcutâ€
 From the repository root:
 
 ```sh
-swiftc app/Sources/Understudy/WatchSession.swift app/Tests/WatchChecks.swift -o /tmp/understudy-watch-checks
+swiftc apps/mac/Sources/Understudy/WatchSession.swift apps/mac/Tests/WatchChecks.swift -o /tmp/understudy-watch-checks
 /tmp/understudy-watch-checks
 ```
 
@@ -52,7 +52,7 @@ fresh-session reset. Visual and keyboard checks still require opening the app.
 
 ## Verification on 2026-09-23
 
-- Release bundle built with `app/scripts/bundle.sh`; bundle signature and plist checks passed.
+- Release bundle built with `apps/mac/scripts/bundle.sh`; bundle signature and plist checks passed.
 - Session checks passed, including the live timer and cancellation after Stop.
 - Rendered the actual Watch view at 420 points wide in playing, stopped, and
   completed states. Inspected labels, progress, rules, and controls; corrected

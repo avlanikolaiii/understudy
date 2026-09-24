@@ -1,6 +1,6 @@
 # Weekly report engine
 
-`app/Sources/Understudy/ReportEngine.swift` computes real figures from supplied CSV
+`apps/mac/Sources/Understudy/ReportEngine.swift` computes real figures from supplied CSV
 and renders the layout in `templates/weekly-update.md`, following
 `docs/report-spec.md`. It is a pure Foundation module: no file access, network,
 Supabase, SwiftUI, or shared mutable state. The teaching source data is fictional;
@@ -84,7 +84,7 @@ structure validation applies to the requested week and its comparison week.
 Run from the repository root using Command Line Tools:
 
 ```sh
-swiftc -module-cache-path /private/tmp/understudy-mc app/Sources/Understudy/ReportEngine.swift app/Tests/ReportChecks.swift -o /tmp/understudy-report-checks && /tmp/understudy-report-checks
+swiftc -module-cache-path /private/tmp/understudy-mc apps/mac/Sources/Understudy/ReportEngine.swift apps/mac/Tests/ReportChecks.swift -o /tmp/understudy-report-checks && /tmp/understudy-report-checks
 ```
 
 The checks compare the title, date line, and every table line exactly with teaching

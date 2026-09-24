@@ -3,7 +3,7 @@ import Foundation
 /// Connection settings for the Understudy backend (Supabase).
 ///
 /// Looked up in this order:
-/// 1. `config.json` inside the app bundle (copied from `app/config.local.json` at build time)
+/// 1. `config.json` inside the app bundle (copied from `apps/mac/config.local.json` at build time)
 /// 2. `~/Library/Application Support/Understudy/config.json`
 ///
 /// The anon (publishable) key is safe to ship in an app: every table is protected by

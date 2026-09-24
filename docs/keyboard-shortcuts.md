@@ -25,9 +25,9 @@ uses Carbon registration; no Accessibility or screen-recording permission is add
 ## Checks
 
 ```sh
-swiftc app/Sources/Understudy/KeyboardShortcut.swift app/Tests/ShortcutChecks.swift -o /tmp/understudy-shortcut-checks
+swiftc apps/mac/Sources/Understudy/KeyboardShortcut.swift apps/mac/Tests/ShortcutChecks.swift -o /tmp/understudy-shortcut-checks
 /tmp/understudy-shortcut-checks
-app/scripts/bundle.sh
+apps/mac/scripts/bundle.sh
 ```
 
 Checks cover persistence, invalid keys, cancellation, restore, failed startup,

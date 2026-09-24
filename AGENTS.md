@@ -10,7 +10,7 @@ Read this file first. It's the project's standing context and rules for **both**
 
 ## Working together (Codex + Claude Code)
 
-1. **Before you start:** run `git pull`, read `docs/worklog.md`, then run `git status` and `git log --oneline -10`. If the "Now working" line names the other agent, don't edit `app/`. Tell the human instead.
+1. **Before you start:** run `git pull`, read `docs/worklog.md`, then run `git status` and `git log --oneline -10`. If the "Now working" line names the other agent, don't edit `apps/mac/`. Tell the human instead.
 2. **Claim:** set "Now working: <you>, since <time>" at the top of `docs/worklog.md`.
 3. **Never** discard, reset, or rewrite the other agent's work: uncommitted files, commits, or branches. If you find uncommitted work you didn't write, commit it as-is first with a message saying whose it is.
 4. **Finish:** commit in small steps, append a work log entry (commits · verified · not verified · next), set "Now working: nobody", then `git push`. (A `codex exec` sandbox can't write `.git`, so leave its work uncommitted with a log entry, and Claude or the human commits and pushes it.)
@@ -29,12 +29,12 @@ A Mac companion that lives in the MacBook notch (with a menu bar fallback). You 
 - First customer hypothesis: agencies and consultancies. Flagship workflow: the **weekly client update** (Google Sheet data → report from a template → tracker row → email draft waiting for approval).
 - Status: **product concept**. Nothing in the product works for users yet.
 
-## Current priority: the clickable app prototype (`app/`)
+## Current priority: the clickable app prototype (`apps/mac/`)
 
 The capture experiments and customer validation are **paused**. Keep their files, but don't extend them unless asked.
 
 ### Done (slice 1, commit `8aac6ad`)
-- A native macOS app (SwiftUI + AppKit, Swift package) in `app/`. Build it with `app/scripts/bundle.sh`, which produces `app/build/Understudy.app`.
+- A native macOS app (SwiftUI + AppKit, Swift package) in `apps/mac/`. Build it with `apps/mac/scripts/bundle.sh`, which produces `apps/mac/build/Understudy.app`.
 - `NotchController.swift`: a borderless, non-activating panel over the notch. Click it or press ⌥ Space (a Carbon hot key, so no Accessibility access is needed) to expand. On Macs without a notch it drops down below the menu bar. There's also a menu bar item.
 - `AppModel.swift`: Supabase Auth with **Google, Apple, and email link** sign-in (`supabase-swift` 2.55.x, PKCE, deep link `understudy://auth-callback`). After sign-in it loads the user's skills and adds one labeled sample skill.
 - `PanelViews.swift`: the sign-in, home, and "not configured" views.
@@ -42,7 +42,7 @@ The capture experiments and customer validation are **paused**. Keep their files
 - `docs/setup/accounts.md`: Supabase, Google OAuth, and Apple setup (the human does this: it involves accounts and secrets).
 
 ### Waiting on the human
-Create the Supabase project, the Google OAuth client, and the Apple Services ID and key, then create `app/config.local.json` (see `app/config.example.json`). Until then, the app shows "Not connected to a server yet".
+Create the Supabase project, the Google OAuth client, and the Apple Services ID and key, then create `apps/mac/config.local.json` (see `apps/mac/config.example.json`). Until then, the app shows "Not connected to a server yet".
 
 ### One app (2026-09-23 evening, Claude Code)
 There used to be two experiences in one binary: the account notch panel and Codex's local workspace, each with its own skills and receipts. They are now **one app**:
@@ -79,7 +79,7 @@ There used to be two experiences in one binary: the account notch panel and Code
 - **Numbers** follow `docs/report-spec.md` exactly: decimal half-up rounding, and missing data is never estimated.
 - **Secrets** (the Google client secret, Apple `.p8` key, Anthropic key, Supabase service key) never go into the repo or the app. `.gitignore` covers `config.local.json`, `runs/`, `client-examples/`, and the key files.
 - **Don't** send outreach, create files in the user's Google Drive, or request new macOS permissions without asking the human first.
-- **Toolchain gotcha:** this Mac has the Command Line Tools, not Xcode. The SwiftUI macro plugins are missing, so **don't use `@State`, `@Observable`, or `#Preview`**. Keep view state in `ObservableObject` classes with `@Published`, as the existing code does. Build with `swift build` or `app/scripts/bundle.sh`.
+- **Toolchain gotcha:** this Mac has the Command Line Tools, not Xcode. The SwiftUI macro plugins are missing, so **don't use `@State`, `@Observable`, or `#Preview`**. Keep view state in `ObservableObject` classes with `@Published`, as the existing code does. Build with `swift build` or `apps/mac/scripts/bundle.sh`.
 - The product requires macOS 26+; the package targets macOS 14 so it builds easily.
 
 ## Decisions already made (don't reopen without asking)
@@ -92,7 +92,7 @@ There used to be two experiences in one binary: the account notch panel and Code
 
 | Path | What |
 |---|---|
-| `app/` | The macOS app (current work) |
+| `apps/mac/` | The macOS app (current work) |
 | `supabase/migrations/` | Database schema and security |
 | `docs/setup/accounts.md` | Account setup for the human |
 | `docs/prototype-1.md`, `docs/report-spec.md` | Prototype scope and the exact report math |
