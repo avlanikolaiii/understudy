@@ -3,13 +3,15 @@ import Combine
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
-    // One set of objects, shared by the main window and the notch.
-    let model = AppModel()
-    private lazy var library = SkillLibrary(auth: model)
-    private let watch = WatchSession()
-    private lazy var activity = NotchActivity(watch: watch)
-    private let ui = WorkspaceState()
-    private var notch: NotchController!
+    // One set of objects, shared by the main window and the notch. With --self-test they use a
+    // temporary library, no server, a test clock, and faster notch timings (see SelfTest.swift).
+    let selfTest = SelfTestOptions(arguments: CommandLine.arguments)
+    lazy var model = AppModel(config: selfTest == nil ? AppConfig.load() : nil)
+    lazy var library = SkillLibrary(auth: model, file: selfTest?.libraryFile ?? .standard)
+    lazy var watch = selfTest.map { options in WatchSession(now: { options.clock.now() }) } ?? WatchSession()
+    lazy var activity = selfTest.map { NotchActivity(watch: watch, sleep: $0.sleep) } ?? NotchActivity(watch: watch)
+    let ui = WorkspaceState()
+    private(set) var notch: NotchController!
     private var statusItem: NSStatusItem!
     private let shortcuts = ShortcutManager()
     private var shortcutSettings: ShortcutSettingsController!
@@ -46,6 +48,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 self.model.shortcutLabel = self.shortcuts.isActive ? label : "Shortcut unavailable"
                 watchItem?.title = self.shortcuts.isActive ? "Watch a Task (Simulated) · \(label)" : "Watch a Task (Simulated)"
             }
+        }
+        if let options = selfTest {
+            // No global shortcut and no server: the test drives the same objects directly.
+            Task { @MainActor in exit(await SelfTest(app: self, options: options).run()) }
+            return
         }
         shortcuts.start { [weak self] in self?.shortcutPressed() }
         model.start()
@@ -101,15 +108,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return true
     }
 
-    @objc private func teachSkill() { workspace.teachSkill() }
+    @objc func teachSkill() { workspace.teachSkill() }
 
-    @objc private func openWorkspace() { workspace.show() }
+    @objc func openWorkspace() { workspace.show() }
 
-    @objc private func openSettings() { shortcutSettings.show() }
+    @objc func openSettings() { shortcutSettings.show() }
 
     /// The landing page's story: the shortcut starts Watch, and pressing it again stops Watch
     /// and opens the review in the main window.
-    @objc private func shortcutPressed() {
+    @objc func shortcutPressed() {
         // Stopping Watch always wins, even while a rehearsal or receipt is showing in the notch.
         if watch.isPlaying {
             ui.reviewWatch(watch)

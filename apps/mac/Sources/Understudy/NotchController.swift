@@ -28,6 +28,7 @@ final class NotchController: NSObject {
     private var hosting: NotchHostingView<NotchLiveView>!
     private var bag = Set<AnyCancellable>()
     private var shrinkWork: DispatchWorkItem?
+    private var handleTap: () -> Void = {}
     private var hideWork: DispatchWorkItem?
 
     private let screen: NSScreen
@@ -59,13 +60,14 @@ final class NotchController: NSObject {
         panel.hidesOnDeactivate = false
         panel.setAccessibilityLabel("Understudy")
 
+        handleTap = { [weak activity] in
+            guard let activity else { return }
+            let page = activity.page
+            activity.dismiss()
+            onTap(page)
+        }
         let root = NotchLiveView(activity: activity, state: state, notchSize: notchSize, hasNotch: hasNotch,
-                                 onTap: { [weak activity] in
-                                     guard let activity else { return }
-                                     let page = activity.page
-                                     activity.dismiss()
-                                     onTap(page)
-                                 })
+                                 onTap: { [weak self] in self?.handleTap() })
         hosting = NotchHostingView(rootView: root)
         panel.contentView = hosting
 
@@ -80,6 +82,22 @@ final class NotchController: NSObject {
 
         fit()
         if hasNotch { panel.orderFrontRegardless() }
+    }
+
+    /// Whether the strip is open. Read by the self-test.
+    var isExpanded: Bool { state.expanded }
+
+    /// The same action as clicking the notch. Used by the self-test.
+    func tap() { handleTap() }
+
+    /// The strip as SwiftUI draws it right now, at the panel's size. Used by the self-test,
+    /// because copying a non-opaque panel's backing store doesn't match what's on screen.
+    func render() -> NSBitmapImageRep? {
+        let view = NotchLiveView(activity: activity, state: state, notchSize: notchSize, hasNotch: hasNotch, onTap: {})
+            .frame(width: panel.frame.width, height: panel.frame.height)
+        let renderer = ImageRenderer(content: view)
+        renderer.scale = 2
+        return renderer.cgImage.map { NSBitmapImageRep(cgImage: $0) }
     }
 
     private var reduceMotion: Bool { NSWorkspace.shared.accessibilityDisplayShouldReduceMotion }

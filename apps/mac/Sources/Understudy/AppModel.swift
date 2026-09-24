@@ -22,8 +22,10 @@ final class AppModel: ObservableObject {
 
     let client: SupabaseClient?
 
-    init() {
-        if let config = AppConfig.load() {
+    /// `config` defaults to the bundled or Application Support config. The self-test passes nil,
+    /// like a Mac with no server configured.
+    init(config: AppConfig? = AppConfig.load()) {
+        if let config {
             client = SupabaseClient(
                 supabaseURL: config.supabaseURL,
                 supabaseKey: config.supabaseAnonKey,

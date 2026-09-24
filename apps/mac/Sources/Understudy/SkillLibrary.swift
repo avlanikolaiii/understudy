@@ -129,10 +129,7 @@ final class SkillLibrary: ObservableObject {
         panel.canCreateDirectories = true
         guard panel.runModal() == .OK, let url = panel.url else { return }
         do {
-            try receipt.report.write(to: url, atomically: true, encoding: .utf8)
-            guard try String(contentsOf: url, encoding: .utf8) == receipt.report else {
-                throw CocoaError(.fileReadCorruptFile)
-            }
+            try write(receipt, to: url)
             if let index = receipts.firstIndex(where: { $0.id == receipt.id }) { receipts[index].exportPath = url.path }
             if mode == .sample, let index = local.receipts.firstIndex(where: { $0.id == receipt.id }) {
                 local.receipts[index].exportPath = url.path
@@ -141,6 +138,14 @@ final class SkillLibrary: ObservableObject {
             notice = "Sample exported and read back successfully: \(url.lastPathComponent)"
         } catch {
             notice = "The sample could not be exported: \(error.localizedDescription)"
+        }
+    }
+
+    /// Writes the report, then reads it back and checks it matches. Export's evidence step.
+    func write(_ receipt: Receipt, to url: URL) throws {
+        try receipt.report.write(to: url, atomically: true, encoding: .utf8)
+        guard try String(contentsOf: url, encoding: .utf8) == receipt.report else {
+            throw CocoaError(.fileReadCorruptFile)
         }
     }
 
