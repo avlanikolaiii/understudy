@@ -67,6 +67,7 @@ The QA system already in place is what keeps this plan honest as it grows.
 - Each new feature adds its nodes and edges to `qa/flows.json`, invariants to `SelfTest`, and cases to the checks.
 - The held-out eval set grows with each new workflow. The rule stays: only harnesses read `data/evaluation/`.
 - CI runs the full matrix on every pull request, across the macOS versions a person might have.
+- **Memory in long sessions.** The self-test found no leaks in Understudy's code: `leaks` shows only about 20 KB in Apple's LinkServices, and that doesn't grow. Two things still grow slowly, and both come from the frameworks. AppKit keeps a small key-value dependency (about 160 bytes) each time SwiftUI inserts a native control, which is a few KB per day for normal use. The Receipts picker also lists every receipt, so it grows with the receipt history. Recheck both in long sessions, and paginate receipts once people have months of history.
 
 ## Roadmap
 
