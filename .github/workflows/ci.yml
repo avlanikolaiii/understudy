@@ -14,7 +14,7 @@ permissions:
 
 jobs:
   web:
-    name: Website build
+    name: Website build and QA
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -24,30 +24,54 @@ jobs:
       - name: Build
         working-directory: apps/web
         run: node build.mjs
+      - name: Static QA
+        working-directory: apps/web
+        run: node qa.mjs
 
   mac:
-    name: Mac app checks
-    runs-on: macos-latest
+    # Each runner is a fresh Mac nobody has used: no app data, no server config (Sample mode),
+    # and no notch (the drop-down fallback). That is the first run on any person's MacBook.
+    name: Mac · ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-14, macos-15, macos-26]
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
       - name: Toolchain
-        run: swift --version
-      - name: Standalone checks
-        run: |
-          set -e
-          S=apps/mac/Sources/Understudy
-          T=apps/mac/Tests
-          run() { name=$1; shift; echo "::group::$name"; swiftc "$@" -o "$RUNNER_TEMP/$name"; "$RUNNER_TEMP/$name"; echo "::endgroup::"; }
-          run report    $S/ReportEngine.swift $T/ReportChecks.swift
-          run library   $S/Library.swift $T/PrototypeChecks.swift
-          run watch     $S/WatchSession.swift $T/WatchChecks.swift
-          run workspace $S/Library.swift $S/WatchSession.swift $S/WorkspaceState.swift $T/WorkspaceChecks.swift
-          run notch     -parse-as-library $S/Library.swift $S/WatchSession.swift $S/WorkspaceState.swift $S/NotchActivity.swift $T/NotchChecks.swift
-          run shortcut  $S/KeyboardShortcut.swift $T/ShortcutChecks.swift
+        run: sw_vers && swift --version
       - uses: actions/cache@v4
         with:
           path: apps/mac/.build
-          key: spm-${{ runner.os }}-${{ hashFiles('apps/mac/Package.resolved') }}
+          key: spm-${{ matrix.os }}-${{ hashFiles('apps/mac/Package.resolved') }}
       - name: Build the app
-        working-directory: apps/mac
-        run: swift build -c release
+        run: apps/mac/scripts/bundle.sh
+      - name: Signature
+        run: codesign --verify --deep --strict apps/mac/build/Understudy.app
+      - name: QA (checks, simulated users, website, held-out evals)
+        run: python3 qa/run.py --skip-build --sessions 80 --seeds 1,2
+      - name: First launch
+        run: |
+          before=$(ls ~/Library/Logs/DiagnosticReports 2>/dev/null | grep -c Understudy || true)
+          open apps/mac/build/Understudy.app
+          sleep 10
+          pgrep -x Understudy >/dev/null || { echo "Understudy quit during its first 10 seconds"; exit 1; }
+          after=$(ls ~/Library/Logs/DiagnosticReports 2>/dev/null | grep -c Understudy || true)
+          [ "$after" = "$before" ] || { echo "Understudy left a crash report"; exit 1; }
+          pkill -x Understudy
+      - name: Gatekeeper (informational)
+        # Ad-hoc signed builds can't pass Gatekeeper yet; distribution needs Developer ID + notarization.
+        run: spctl --assess --type execute apps/mac/build/Understudy.app || echo "::notice::Not notarized yet, expected until Developer ID signing is set up."
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: qa-${{ matrix.os }}
+          path: |
+            qa/out/report.html
+            qa/out/run.json
+            qa/out/self-test-*/*.png
+          if-no-files-found: ignore
