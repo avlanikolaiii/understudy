@@ -4,7 +4,7 @@ Both agents work in this repo. Read this file and `git status` before starting.
 
 **Now working (split, since 2026-09-23 19:20):**
 - **Claude Code:** the Supabase setup. Files: `supabase/`, `docs/setup/`, `app/config.local.json`, `AppModel.swift`, `SkillLibrary.swift`, `AccountView.swift`, `Config.swift`, `scripts/bundle.sh`.
-- **Codex (`codex exec`, started by Claude at the human's request):** the report engine. Files: new `app/Sources/Understudy/ReportEngine.swift`, `app/Tests/ReportChecks.swift`, `docs/report-engine.md` only.
+- **Codex: done**
 
 Don't edit the other agent's files until its line is released.
 
@@ -64,3 +64,10 @@ Entries are append-only, newest last. Use this format:
   - The no-notch fallback.
   - Every signed-in flow, because Supabase isn't set up.
 - next: the human sets up Supabase (docs/setup/accounts.md, including migration 0002). Then the approved Skill review slice (editable rules saved to `skills.definition`).
+
+## 2026-09-23 19:02 · Codex · Pure Decimal weekly report engine
+- commits: none. Git staging was blocked by the sandbox: `fatal: Unable to create '/Users/nikolai/Developer/understudy/.git/index.lock': Operation not permitted`. The three assigned files remain uncommitted; no other agent's files were staged or changed.
+- what: `ReportEngine.report(csv:week:client:agency:)` returns a Sendable `WeeklyReport` with Markdown, source-data completeness, missing cells, and typed unrounded figures for both weeks and their changes. Foundation only; deterministic dates/table; explicit AI placeholders; no file or network access. API and input rules are in `docs/report-engine.md`.
+- verified: the exact requested `swiftc` command and executable passed all five check groups. Swift 6 strict concurrency with warnings-as-errors also passed. Teaching weeks 1, 2, and 3 match the fixture titles, dates, and all table lines exactly. Synthetic checks cover half-up ties (including signed changes and repeating rates), sum-before-rounding, blank Video spend and dependent values, other missing cells, zero leads/spend, missing/zero/absent prior figures, CSV normalization, deterministic row order, and invalid input. Whitespace checks passed. No spec/fixture disagreements. No held-out data was accessed.
+- not verified: app integration, app bundle, Supabase, Google Sheets, AI proxy, output-file read-back, tracker/email behavior, or receipt persistence. `isComplete` concerns source figures only; all three judgment sections still show `[AI step: not connected yet]`.
+- next: commit the engine/checks, then docs/worklog from a session allowed to write Git metadata; end each commit message with `Co-Authored-By: Codex <noreply@openai.com>`. Wire the engine into the app in the next authorized slice, keeping missing-data gating and AI placeholders visible.
