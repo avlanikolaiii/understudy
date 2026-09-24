@@ -4,6 +4,7 @@
     python3 qa/run.py                       # 300 sessions × seeds 1,2,3
     python3 qa/run.py --sessions 1000 --seeds 1,2,3,4,5
     python3 qa/run.py --quick               # 40 sessions, one seed (a smoke run)
+    python3 qa/run.py --skip-build --only self-test   # run a prebuilt app on this Mac (CI matrix)
 
 Standard library only. Run from the repository root on a Mac (the self-test needs a window
 server). Writes qa/out/ (git-ignored): run.json, report.html, screenshots. Appends one summary
@@ -50,6 +51,7 @@ def run_self_test(sessions, seeds):
     runs = []
     for seed in seeds:
         out = OUT / f"self-test-{seed}"
+        (out / "self-test.json").unlink(missing_ok=True)
         code, log, secs = sh([str(APP), f"--self-test={sessions},{seed}", f"--self-test-out={out}"], timeout=7200)
         report = json.loads((out / "self-test.json").read_text()) if (out / "self-test.json").exists() else {}
         runs.append({"seed": seed, "ok": code == 0 and bool(report), "seconds": secs, "exit": code,
@@ -58,12 +60,25 @@ def run_self_test(sessions, seeds):
     return {"suite": "self-test", "passed": sum(r["ok"] for r in runs), "total": len(runs), "sessions": sessions, "runs": runs}
 
 
+def fresh_report(path, cmd, cwd=ROOT, suite=""):
+    """Runs a suite that writes its own JSON report. The old report is deleted first, so a crash
+    can never inherit a previous pass; a missing report is a failure."""
+    path.unlink(missing_ok=True)
+    code, log, _ = sh(cmd, cwd=cwd)
+    if not path.exists():
+        return {"suite": suite, "passed": 0, "total": 1, "checks": [], "weeks": [],
+                "error": f"exit {code} without a report: {log[-400:]}"}
+    report = json.loads(path.read_text())
+    if code != 0 and report.get("passed") == report.get("total"):
+        report["passed"] = 0  # the process failed even though its report looks clean
+    return report
+
+
 def run_web():
     code, log, _ = sh(["node", "build.mjs"], cwd=ROOT / "apps/web")
     if code != 0:
         return {"suite": "web-qa", "passed": 0, "total": 1, "checks": [{"name": "build", "ok": False, "detail": log[-400:]}]}
-    sh(["node", "qa.mjs", str(OUT / "web-qa.json")], cwd=ROOT / "apps/web")
-    return json.loads((OUT / "web-qa.json").read_text())
+    return fresh_report(OUT / "web-qa.json", ["node", "qa.mjs", str(OUT / "web-qa.json")], cwd=ROOT / "apps/web", suite="web-qa")
 
 
 def run_eval():
@@ -71,8 +86,7 @@ def run_eval():
     code, log, _ = sh(["swiftc", f"{SRC}/ReportEngine.swift", "qa/eval-holdout.swift", "-o", str(binary)])
     if code != 0:
         return {"suite": "eval-holdout", "passed": 0, "total": 1, "weeks": [], "error": log[-400:]}
-    sh([str(binary), str(OUT / "eval-holdout.json")])
-    return json.loads((OUT / "eval-holdout.json").read_text())
+    return fresh_report(OUT / "eval-holdout.json", [str(binary), str(OUT / "eval-holdout.json")], suite="eval-holdout")
 
 
 def agent_suite(name):
@@ -94,7 +108,10 @@ def coverage(flows, suites):
     for surface in flows["surfaces"]:
         for node in surface["nodes"]:
             nid, suite = node["id"], node["suite"]
-            if suite == "manual":
+            key = {"eval": "eval-holdout"}.get(suite, suite)
+            if suites.get(key) and suites[key].get("skipped"):
+                s = "skipped"
+            elif suite == "manual":
                 s = "manual"
             elif suite == "self-test":
                 prefix = nid.split(".")[0]
@@ -107,9 +124,9 @@ def coverage(flows, suites):
             elif suite == "eval":
                 e = suites["eval-holdout"]
                 s = "pass" if e["total"] and e["passed"] == e["total"] else "fail"
-            else:  # browser, db
+            else:  # browser, db: run by an agent; absent means not run this time
                 agent = suites.get(suite)
-                s = "missed" if not agent else ("pass" if nid in agent.get("passedNodes", []) else "fail" if nid in agent.get("failedNodes", []) else "missed")
+                s = "skipped" if not agent else ("pass" if nid in agent.get("passedNodes", []) else "fail" if nid in agent.get("failedNodes", []) else "missed")
             status[nid] = s
     edges_taken = {}
     for run in suites["self-test"]["runs"]:
@@ -120,7 +137,7 @@ def coverage(flows, suites):
 
 # ---------- report ----------
 
-COLORS = {"pass": "#1f9d55", "fail": "#d64545", "missed": "#9aa1ae", "manual": "#d69e2e"}
+COLORS = {"pass": "#1f9d55", "fail": "#d64545", "missed": "#9aa1ae", "manual": "#d69e2e", "skipped": "#4b5563"}
 
 
 def svg_flow_graph(flows, status, edges_taken):
@@ -234,6 +251,7 @@ def main():
     parser.add_argument("--seeds", default="1,2,3")
     parser.add_argument("--quick", action="store_true")
     parser.add_argument("--skip-build", action="store_true")
+    parser.add_argument("--only", default="", help="comma list: checks,self-test,web-qa,eval-holdout")
     args = parser.parse_args()
     sessions, seeds = (40, [1]) if args.quick else (args.sessions, [int(s) for s in args.seeds.split(",")])
     OUT.mkdir(parents=True, exist_ok=True)
@@ -242,11 +260,15 @@ def main():
         code, log, _ = sh(["apps/mac/scripts/bundle.sh"])
         if code != 0:
             print(log[-2000:]); sys.exit(1)
-    suites = {"checks": run_checks(), "self-test": run_self_test(sessions, seeds), "web-qa": run_web(),
-              "eval-holdout": run_eval(), "browser": agent_suite("browser"), "db": agent_suite("db")}
+    only = set(filter(None, args.only.split(",")))
+    runners = {"checks": run_checks, "self-test": lambda: run_self_test(sessions, seeds),
+               "web-qa": run_web, "eval-holdout": run_eval}
+    skipped = lambda name: {"suite": name, "passed": 0, "total": 0, "skipped": True, "checks": [], "runs": [], "weeks": []}
+    suites = {name: (run() if not only or name in only else skipped(name)) for name, run in runners.items()}
+    suites.update({"browser": agent_suite("browser"), "db": agent_suite("db")})
     flows = json.loads((ROOT / "qa/flows.json").read_text())
     status, edges_taken = coverage(flows, suites)
-    automated = [v for v in status.values() if v != "manual"]
+    automated = [v for v in status.values() if v not in ("manual", "skipped")]
     commit = subprocess.run(["git", "rev-parse", "--short", "HEAD"], cwd=ROOT, capture_output=True, text=True).stdout.strip()
     summary = {
         "date": datetime.datetime.now().isoformat(timespec="seconds"), "commit": commit, "sessions": sessions, "seeds": seeds,
@@ -263,7 +285,13 @@ def main():
     write_report(summary, suites, flows, status, edges_taken, history)
 
     print(json.dumps(summary, indent=2))
-    failed = [k for k in ("checks", "self-test", "web-qa", "eval-holdout") if suites[k]["passed"] != suites[k]["total"]]
+    # The gate: every suite that ran (including loaded agent suites) passed, and no automated node
+    # of a suite that ran is failing or unreached.
+    failed = [k for k, v in suites.items() if v and not v.get("skipped") and v["passed"] != v["total"]]
+    uncovered = [n for n, v in status.items() if v in ("fail", "missed")]
+    if uncovered:
+        failed.append(f"coverage ({len(uncovered)} nodes: {', '.join(uncovered[:8])})")
+    print("gate:", "PASS" if not failed else f"FAIL {failed}")
     print(f"report: {OUT / 'report.html'}")
     sys.exit(1 if failed else 0)
 
