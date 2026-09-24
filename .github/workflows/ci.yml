@@ -1,0 +1,53 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  web:
+    name: Website build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Build
+        working-directory: apps/web
+        run: node build.mjs
+
+  mac:
+    name: Mac app checks
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Toolchain
+        run: swift --version
+      - name: Standalone checks
+        run: |
+          set -e
+          S=apps/mac/Sources/Understudy
+          T=apps/mac/Tests
+          run() { name=$1; shift; echo "::group::$name"; swiftc "$@" -o "$RUNNER_TEMP/$name"; "$RUNNER_TEMP/$name"; echo "::endgroup::"; }
+          run report    $S/ReportEngine.swift $T/ReportChecks.swift
+          run library   $S/Library.swift $T/PrototypeChecks.swift
+          run watch     $S/WatchSession.swift $T/WatchChecks.swift
+          run workspace $S/Library.swift $S/WatchSession.swift $S/WorkspaceState.swift $T/WorkspaceChecks.swift
+          run notch     -parse-as-library $S/Library.swift $S/WatchSession.swift $S/WorkspaceState.swift $S/NotchActivity.swift $T/NotchChecks.swift
+          run shortcut  $S/KeyboardShortcut.swift $T/ShortcutChecks.swift
+      - uses: actions/cache@v4
+        with:
+          path: apps/mac/.build
+          key: spm-${{ runner.os }}-${{ hashFiles('apps/mac/Package.resolved') }}
+      - name: Build the app
+        working-directory: apps/mac
+        run: swift build -c release
