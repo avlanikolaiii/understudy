@@ -1,7 +1,7 @@
 #!/bin/sh
 # Build Understudy.app from the Swift package.
-#   app/scripts/bundle.sh          → app/build/Understudy.app
-# If app/config.local.json exists, it's copied into the bundle (it's git-ignored).
+#   apps/mac/scripts/bundle.sh          → apps/mac/build/Understudy.app
+# If apps/mac/config.local.json exists, it's copied into the bundle (it's git-ignored).
 set -e
 CONFIGURATION="${CONFIGURATION:-release}"
 cd "$(dirname "$0")/.."

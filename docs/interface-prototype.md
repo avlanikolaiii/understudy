@@ -8,11 +8,11 @@ This is a clickable native Mac app. It is not a working demonstration-learning e
 - **The notch** is the live companion, styled and animated like the landing page's hero demo. The pill has a glowing dot. It springs open into a strip with a label, a timer, and the last 4 steps: Watching (pulsing dot), New skill, Rehearsing (blue dot, read-only), and Receipt. It never asks for sign-in or typing.
 - **One data layer** (`SkillLibrary`): before sign-in it runs in **Sample mode**, saved on this Mac in the same JSON file as before, so old data carries over. After sign-in, skills and receipts come from the Supabase account. Receipts need `supabase/migrations/0002_receipt_details.sql`.
 - The shortcut (default Option-Space) follows the page's story: press it once to start Watch, and press it again to stop and open the review.
-- `open app/build/Understudy.app --args --notch-demo` plays the landing page's full sequence in the real notch, labeled "Concept demonstration".
+- `open apps/mac/build/Understudy.app --args --notch-demo` plays the landing page's full sequence in the real notch, labeled "Concept demonstration".
 
 ## Open
 
-Build from the project root with `app/scripts/bundle.sh`, then open `app/build/Understudy.app`.
+Build from the project root with `apps/mac/scripts/bundle.sh`, then open `apps/mac/build/Understudy.app`.
 
 The main window opens at launch. Reopen it from the menu-bar icon with **Open Understudy**, or click the notch. The configurable global shortcut (Option-Space by default) starts or stops the simulated Watch. The workspace has a Dock entry, standard app menus, a native sidebar and toolbar, and follows the system appearance.
 
@@ -56,7 +56,7 @@ The capture experiment and held-out evaluation data remain separate and unchange
 
 ## Regression checks
 
-From `app/`, compile the isolated sample domain checks:
+From `apps/mac/`, compile the isolated sample domain checks:
 
 ```sh
 swiftc Sources/Understudy/Library.swift Tests/PrototypeChecks.swift -o /tmp/understudy-prototype-checks
@@ -68,14 +68,14 @@ These check missing-value propagation, simulation disclosure, and serialized rec
 ## Shared Watch checks
 
 ```sh
-swiftc app/Sources/Understudy/Library.swift app/Sources/Understudy/WatchSession.swift app/Sources/Understudy/WorkspaceState.swift app/Tests/WorkspaceChecks.swift -o /tmp/understudy-workspace-checks
+swiftc apps/mac/Sources/Understudy/Library.swift apps/mac/Sources/Understudy/WatchSession.swift apps/mac/Sources/Understudy/WorkspaceState.swift apps/mac/Tests/WorkspaceChecks.swift -o /tmp/understudy-workspace-checks
 /tmp/understudy-workspace-checks
 ```
 
 Notch strip checks (states, row order, read-only rehearsal, missing-spend receipt):
 
 ```sh
-swiftc -parse-as-library app/Sources/Understudy/{Library,WatchSession,WorkspaceState,NotchActivity}.swift app/Tests/NotchChecks.swift -o /tmp/understudy-notch-checks
+swiftc -parse-as-library apps/mac/Sources/Understudy/{Library,WatchSession,WorkspaceState,NotchActivity}.swift apps/mac/Tests/NotchChecks.swift -o /tmp/understudy-notch-checks
 /tmp/understudy-notch-checks
 ```
 
@@ -84,7 +84,7 @@ review, carrying an unsubmitted note forward, and preventing duplicate notes.
 
 ## Verification on 2026-09-23
 
-- Release build with `app/scripts/bundle.sh` passed. Bundle signature and plist
+- Release build with `apps/mac/scripts/bundle.sh` passed. Bundle signature and plist
   validation passed. The Command Line Tools linker emitted missing search-path
   warnings, without preventing the build.
 - Watch session, shared workspace session, shortcut, and sample-domain checks passed.

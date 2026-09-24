@@ -1,8 +1,8 @@
-// Draws the app icon: the glowing dot from the website header (`.bulb` in web/src/assets/site.css)
+// Draws the app icon: the glowing dot from the website header (`.bulb` in apps/web/src/assets/site.css)
 // on a dark rounded square, placed on Apple's macOS icon grid (824-point square in a 1024 canvas).
 // The page draws the dot as three layers, in units of its 6-px radius:
 //   dot r=6 · ring r=10 at 30% (box-shadow 0 0 0 4px) · glow spread to r=12, blurred 22 px, at 55%.
-//   swift app/scripts/make-icon.swift app/Resources/AppIcon.iconset
+//   swift apps/mac/scripts/make-icon.swift apps/mac/Resources/AppIcon.iconset
 import AppKit
 
 let out = URL(fileURLWithPath: CommandLine.arguments.count > 1 ? CommandLine.arguments[1] : "AppIcon.iconset")

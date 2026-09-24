@@ -38,4 +38,4 @@ for (const file of readdirSync(new URL("pages/", src)).filter((f) => f.endsWith(
   if (/\{\{/.test(html)) throw new Error(`${file} left an unfilled placeholder`);
   writeFileSync(new URL(file, dist), html);
 }
-console.log(`Built ${readdirSync(dist).filter((f) => f.endsWith(".html")).length} pages into web/dist (assets v${version}).`);
+console.log(`Built ${readdirSync(dist).filter((f) => f.endsWith(".html")).length} pages into apps/web/dist (assets v${version}).`);

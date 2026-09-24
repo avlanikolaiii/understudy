@@ -77,7 +77,7 @@ Entries are append-only, newest last. Use this format:
   - Applied migrations 0001–0003 through the SQL editor.
   - Revoked anon access.
   - Allowed `understudy://auth-callback`.
-  - Wrote `app/config.local.json` with the publishable key only.
+  - Wrote `apps/mac/config.local.json` with the publishable key only.
   - Rebuilt the app.
 - verified:
   - SQL catalog: 3 tables with RLS and 1/4/2 policies, the free-limit trigger, the sign-up trigger, authenticated grants, and no anon grants.
@@ -91,7 +91,7 @@ Entries are append-only, newest last. Use this format:
 - live: https://understudy-nine-dusky.vercel.app (Vercel project `understudy`, team nicolas-leons-projects; deploy with `cd web && npx vercel deploy --prod`)
 - commits: 76d36fd (site + 0004), 7466a22 (Codex review fixes + 0005), and this log commit.
 - what:
-  - `web/` is a static site with no dependencies (`node build.mjs`).
+  - `apps/web/` is a static site with no dependencies (`node build.mjs`).
   - Home is only the hero (the human's screenshot, dark palette). Each menu item has its own page, plus privacy and 404.
   - All download mentions were removed, at the human's request.
   - Waitlist in Supabase via `join_waitlist` / `add_waitlist_details`. The table itself has no API access.
@@ -109,8 +109,8 @@ Entries are append-only, newest last. Use this format:
 - open: the privacy page still needs a contact email from the human before wider sharing.
 
 ## 2026-09-23 20:55 · Claude Code · App icon = the website's favicon mark
-- commits: the one that adds `app/Resources/AppIcon.icns`.
-- what: `app/scripts/make-icon.swift` draws the favicon (dark rounded square #101217, yellow dot #F4C534, same proportions) on Apple's 824/1024 icon grid. `iconutil` builds the .icns. `bundle.sh` copies it and sets `CFBundleIconFile`.
+- commits: the one that adds `apps/mac/Resources/AppIcon.icns`.
+- what: `apps/mac/scripts/make-icon.swift` draws the favicon (dark rounded square #101217, yellow dot #F4C534, same proportions) on Apple's 824/1024 icon grid. `iconutil` builds the .icns. `bundle.sh` copies it and sets `CFBundleIconFile`.
 - verified: the bundle builds and its signature verifies. `NSWorkspace.icon(forFile:)` returns the new icon, with macOS 26's glass treatment applied.
 - not verified: how the Dock and Finder look on screen (my screenshots of other apps are unreliable). The menu bar item still uses the theater-masks symbol.
 
