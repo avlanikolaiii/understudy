@@ -2,9 +2,9 @@
 
 Both agents work in this repo. Read this file and `git status` before starting.
 
-**Now working (split, since 2026-09-23 19:20):**
-- **Claude Code:** the Supabase sign-in test with the human. Files: `AppModel.swift`, `SkillLibrary.swift`, `AccountView.swift`, `Config.swift`.
-- **Codex:** free.
+**Now working (since 2026-09-23 20:05):**
+- **Claude Code:** the pre-launch website for Vercel (`web/`) and the waitlist table (`supabase/migrations/0004_waitlist.sql`).
+- **Codex:** free. It will be asked to review `web/` and 0004 when they're ready.
 
 Don't edit the other agent's files until its line is released.
 

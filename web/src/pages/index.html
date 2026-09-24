@@ -1,0 +1,62 @@
+<!-- title: Understudy · Show it once. Then hand it off. | description: A Mac companion that lives in your notch. Show it your weekly client update once; it rehearses on past weeks, then hands you a receipt for every run. | nav: home | scripts: demo -->
+    <div class="hero">
+      <div>
+        <p class="kicker">A Mac companion that lives in your notch · built first for agencies</p>
+        <h1>Show it <span class="hl">once.</span> Then hand it off.</h1>
+        <p class="lede">Do your weekly client update once while Understudy watches. It proves it learned by rehearsing on past weeks <b>without seeing what you sent</b>, then takes over. After every run it shows you <b>what it did and how it checked</b>.</p>
+
+        <form class="inline-form" id="hero-form" novalidate>
+          <label for="hero-email" class="sr">Email</label>
+          <input id="hero-email" type="email" autocomplete="email" placeholder="you@agency.com" required>
+          <span class="hp" aria-hidden="true"><label>Website <input type="text" name="website" tabindex="-1" autocomplete="off"></label></span>
+          <button class="btn" type="submit">Get early access</button>
+        </form>
+        <div class="hero-joined" id="hero-joined" hidden><span class="tick" aria-hidden="true">✓</span><span>You're on the list as <b class="j-email"></b>. <a href="/early-access">Tell us about your weekly work →</a></span></div>
+        <p class="inline-status" id="hero-status" role="status" aria-live="polite"></p>
+
+        <ul class="facts">
+          <li>Product concept</li>
+          <li>Free plan planned</li>
+          <li>macOS 26+</li>
+        </ul>
+      </div>
+
+      <div class="demo">
+        <div class="device" aria-hidden="true">
+          <div class="screen">
+            <div class="menubar">
+              <div class="l"><b>Docs</b><span>File</span><span>Edit</span><span>View</span><span>Insert</span></div>
+              <div class="r">Mon 9:02 AM</div>
+            </div>
+            <div class="notch" id="notch">
+              <div class="n-head"><span class="n-dot"></span><span class="n-label" id="n-label"></span><span class="n-meta" id="n-meta"></span></div>
+              <div class="n-body"><div id="n-body"></div></div>
+            </div>
+            <div class="win">
+              <div class="win-bar"><i></i><i></i><i></i><span id="win-title">Norte Studio · weekly update</span><em class="ro" id="win-ro" hidden>Read-only</em></div>
+              <div class="doc">
+                <h5 id="doc-title">Norte Studio · Week 38</h5>
+                <dl>
+                  <dt>Sessions</dt><dd id="f-sessions"></dd>
+                  <dt>Leads</dt><dd id="f-leads"></dd>
+                  <dt>Ad spend</dt><dd id="f-spend"></dd>
+                  <dt>Highlight</dt><dd id="f-high"></dd>
+                </dl>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="base" aria-hidden="true"></div>
+        <p class="voice" id="voice" aria-hidden="true"><b id="voice-lbl">YOU</b><span id="voice-text"></span></p>
+        <p class="demo-note"><span class="tag concept">Concept demonstration</span> A simulation of how Understudy is designed to work, not a recording of the app.</p>
+        <div class="demo-ctl" role="group" aria-label="Jump to a demo stage (pauses the demo)">
+          <button class="chip" type="button" data-phase="show" aria-pressed="false">Show</button>
+          <button class="chip" type="button" data-phase="learn" aria-pressed="false">Learn</button>
+          <button class="chip" type="button" data-phase="rehearse" aria-pressed="false">Rehearse</button>
+          <button class="chip" type="button" data-phase="handoff" aria-pressed="false">Hand off</button>
+          <button class="play" type="button" id="play">Pause</button>
+        </div>
+        <p class="demo-cap" id="demo-cap" aria-live="off"></p>
+      </div>
+    </div>
+

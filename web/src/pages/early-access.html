@@ -1,0 +1,80 @@
+<!-- title: Get early access · Understudy | description: Join the Understudy early-access list: the first build, a say in what we build next, and a provisional three months of Pro free. | nav: early-access -->
+    <section id="waitlist" aria-labelledby="wl-h">
+      <div class="join">
+        <div>
+          <p class="eyebrow">Early access</p>
+          <h1 id="wl-h">Help us build the first real workflow</h1>
+          <p class="intro" style="margin-bottom:0">We're looking for agencies and consultancies that send weekly client updates. Early-access members get the first build, a direct say in what we build next, and a provisional offer of three months of Pro free.</p>
+        </div>
+        <div>
+          <div class="panel" id="join-panel">
+            <h3>Save my spot</h3>
+            <p class="fine">Just your email to start.</p>
+            <form class="inline-form" id="wl-form" novalidate>
+              <label for="wl-email" class="sr">Email</label>
+              <input id="wl-email" type="email" autocomplete="email" placeholder="you@agency.com" required>
+              <span class="hp" aria-hidden="true"><label>Website <input type="text" name="website" tabindex="-1" autocomplete="off"></label></span>
+              <button class="btn" type="submit">Get early access</button>
+            </form>
+            <p class="status" id="wl-status" role="status" aria-live="polite"></p>
+            <p class="form-note">We only use your email for Understudy early-access news. <a href="/privacy">Privacy</a></p>
+          </div>
+
+          <div class="panel" id="details-panel" hidden>
+            <h3>You're on the list</h3>
+            <p>We'll email <b class="j-email"></b> when the first build is ready. Three quick questions help us decide what to build first.</p>
+            <form id="details-form" novalidate>
+              <div class="field">
+                <label for="d-task">What weekly client work would you hand off first? <span class="opt">(optional)</span></label>
+                <textarea id="d-task" placeholder="e.g. Every Monday I pull numbers from GA4 and Meta Ads into a report for 8 clients"></textarea>
+              </div>
+              <div class="two">
+                <div class="field">
+                  <label for="d-work">What describes you best?</label>
+                  <select id="d-work">
+                    <option value="agency" selected>Agency</option>
+                    <option value="consultancy">Consultancy</option>
+                    <option value="freelancer">Freelancer</option>
+                    <option value="inhouse">In-house team</option>
+                    <option value="other">Something else</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label for="d-mac">Your Mac</label>
+                  <select id="d-mac">
+                    <option value="notch" selected>MacBook with a notch</option>
+                    <option value="no-notch">Mac without a notch</option>
+                    <option value="not-mac">Not on a Mac yet</option>
+                  </select>
+                </div>
+              </div>
+              <button class="btn" type="submit" id="d-save">Save</button>
+              <p class="status" id="d-status" role="status" aria-live="polite"></p>
+            </form>
+            <p id="details-done" hidden>Your answers are saved. Thank you, this shapes what we build first.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="get" aria-labelledby="get-h">
+      <div class="get-grid">
+        <div>
+          <p class="eyebrow">Getting it <span class="tag plan">Planned</span></p>
+          <h2 id="get-h">Try it on sample data first</h2>
+          <p class="intro">You'll be able to see a full run on a sample agency before connecting a single account. Then set up one real workflow, granting each permission only when a step needs it.</p>
+          <ol class="steps">
+            <li><b>Run the sample.</b> Watch it rehearse and produce a receipt on a sample client, with no accounts connected.</li>
+            <li><b>Show it your real update.</b> It asks for Accessibility and each connector only when a step needs it.</li>
+            <li><b>Rehearse, then hand it off.</b> Everything works from the notch, the menu bar, a normal window, or the keyboard.</li>
+          </ol>
+        </div>
+        <aside class="spec" aria-label="Requirements">
+          <dl class="spec-list" style="margin-top:0;border-top:0;padding-top:0">
+            <dt>Requires</dt><dd>macOS 26 or later, Apple silicon</dd>
+            <dt>Works from</dt><dd>The notch, the menu bar (Macs without a notch), or a normal window</dd>
+            <dt>License</dt><dd>Apache 2.0</dd>
+          </dl>
+        </aside>
+      </div>
+    </section>

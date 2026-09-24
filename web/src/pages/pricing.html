@@ -1,0 +1,60 @@
+<!-- title: Pricing · Understudy | description: Free up to 5 skills. Pro $15 a month. Team $30 per person a month. Provisional. | nav: pricing -->
+    <section id="pricing" aria-labelledby="pr-h">
+      <p class="eyebrow">Pricing · provisional</p>
+      <h1 id="pr-h">Start free. Upgrade when it's doing real work.</h1>
+      <p class="intro">Pricing and included usage are provisional. These are the prices we plan to launch with, but how much usage each plan includes hasn't been decided yet.</p>
+      <div class="tiers">
+        <article class="tier lead">
+          <div class="tname"><span>Free</span></div>
+          <h3>Understudy</h3>
+          <div class="amt">$0 <small>forever</small></div>
+          <ul>
+            <li>Up to 5 skills</li>
+            <li>Rehearsal and receipts on every skill</li>
+            <li>Every connector</li>
+            <li>Apple's on-device AI, so no API key needed</li>
+          </ul>
+        </article>
+        <article class="tier">
+          <div class="tname"><span>Pro</span></div>
+          <h3>Understudy Pro</h3>
+          <div class="amt">$15 <small>/ month</small></div>
+          <ul>
+            <li>Unlimited skills</li>
+            <li>Cloud AI for long or complex steps</li>
+            <li>Scheduled runs while your Mac sleeps</li>
+            <li>Skills and memory synced across your devices</li>
+            <li>Claude Opus 5.5 and GPT-5.6 Sol, or your own API keys</li>
+          </ul>
+        </article>
+        <article class="tier">
+          <div class="tname"><span>Team</span></div>
+          <h3>Understudy Team</h3>
+          <div class="amt">$30 <small>/ person / month</small></div>
+          <ul>
+            <li>Everything in Pro</li>
+            <li>One skill library for the whole agency</li>
+            <li>Admin controls and approval flows</li>
+            <li>Approve steps from Slack or Microsoft Teams</li>
+            <li class="feature"><b>Cover for me.</b> Hand chosen skills to a teammate while you're away, with their schedules, rules, and exceptions. The teammate connects their own accounts, and your private credentials and unrelated memory stay yours.</li>
+          </ul>
+        </article>
+      </div>
+      <p class="price-note">Designed to stay on your Mac: skills, memory, receipts, and on-device AI. Designed to use the cloud (Pro and Team only): cloud AI steps, runs while your Mac sleeps, and sync. Included usage per plan is still undecided, and we'll publish it before launch. Early-access offer, also provisional: three months of Pro free.</p>
+    </section>
+
+    <section id="faq" aria-labelledby="faq-h">
+      <p class="eyebrow">Questions · answers describe the design</p>
+      <h2 id="faq-h">Before you ask</h2>
+      <div class="faq">
+        <details><summary>Does any of this work yet?</summary><p>Not yet. Understudy is a product concept, and everything on this page shows the design. We're building a first prototype of one workflow: it reads a Google Sheet, writes a report from a fixed template, rehearses on weeks it hasn't seen, and produces a receipt. It gets listed as working only once we can show it working. See <a href="/what-exists">Where Understudy stands</a>.</p></details>
+        <details><summary>Can a rehearsal change anything in my accounts?</summary><p>No. During a rehearsal, connectors run in read mode. Understudy writes its version inside the app only. It doesn't save files, update trackers, or create drafts in your accounts.</p></details>
+        <details><summary>How do you stop it from copying the answer during rehearsal?</summary><p>It's only given the inputs that existed that week: the campaign data, the notes, and your template. The report you sent and your email are held back until its version is finished, and they're used only to compare.</p></details>
+        <details><summary>What's the difference between “Done” and “Verified”?</summary><p>“Done” is the status: what Understudy says it did. “Verified” is evidence: Understudy went back, read the result from the app, and it matched. A step can be done but not verifiable, and the receipt says so instead of hiding it.</p></details>
+        <details><summary>What if an app changes its layout?</summary><p>Steps that run through a connector don't depend on the screen, so a redesign shouldn't affect them. If a connector itself stops working, the run is designed to stop, mark the step Blocked, and say why in the receipt.</p></details>
+        <details><summary>Why agencies first?</summary><p>It's our starting hypothesis, not a limit. Agencies repeat the same client work every week across several apps, and most use Macs. If your team has a similar weekly routine, join early access and tell us about it.</p></details>
+        <details><summary>Can it see my passwords?</summary><p>No. macOS marks password fields as secure, and Understudy never records what you type into them. Connectors sign in through each app's own login.</p></details>
+      </div>
+    </section>
+    <nav class="next-link" aria-label="Next page"><a href="/what-exists">← What exists</a><a href="/early-access">Get early access →</a></nav>
+

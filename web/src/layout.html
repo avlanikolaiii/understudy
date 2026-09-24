@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>{{title}}</title>
+<meta name="description" content="{{description}}">
+<meta name="theme-color" content="#101217">
+<meta property="og:title" content="{{title}}">
+<meta property="og:description" content="{{description}}">
+<meta property="og:type" content="website">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@700;800;900&family=Courier+Prime:ital,wght@0,400;0,700;1,400&family=Libre+Franklin:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="/assets/site.css?v={{version}}">
+</head>
+<body>
+<div class="wrap">
+  <header class="bar">
+    <a class="mark" href="/"><span class="bulb" aria-hidden="true"></span>Understudy</a>
+    <nav class="nav" aria-label="Main">
+      <a href="/workflow"{{current:workflow}}>The workflow</a>
+      <a href="/rehearsal"{{current:rehearsal}}>Rehearsal</a>
+      <a href="/receipts"{{current:receipts}}>Receipts</a>
+      <a href="/what-exists"{{current:what-exists}}>What exists</a>
+      <a href="/pricing"{{current:pricing}}>Pricing</a>
+    </nav>
+    <a class="bar-cta" href="/early-access"{{current:early-access}}>Get early access</a>
+  </header>
+
+  <main id="main">
+{{content}}
+  </main>
+
+  <footer>
+    <span class="mark"><span class="bulb" aria-hidden="true"></span>Understudy</span>
+    <nav aria-label="Footer">
+      <a href="/workflow">The workflow</a>
+      <a href="/what-exists">What exists</a>
+      <a href="/early-access">Early access</a>
+      <a href="/privacy">Privacy</a>
+    </nav>
+    <span>Show it once. Then hand it off. · In development · © 2026</span>
+  </footer>
+</div>
+<script src="/assets/config.js?v={{version}}"></script>
+<script src="/assets/site.js?v={{version}}"></script>
+{{scripts}}
+</body>
+</html>

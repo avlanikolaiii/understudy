@@ -1,0 +1,53 @@
+<!-- title: Receipts · Understudy | description: Every run ends with a receipt that keeps what it did apart from how it checked. | nav: receipts -->
+    <section id="receipts" aria-labelledby="rc-h">
+      <p class="eyebrow">Receipts <span class="tag concept">Concept demonstration</span></p>
+      <h1 id="rc-h">What it did, and how it checked, kept apart</h1>
+      <p class="intro">“Done” is Understudy's claim. Evidence is what it found when it went back and looked. Every receipt shows both separately, so you know what to trust and what to open yourself.</p>
+      <figure class="rcpt" style="margin:0" aria-label="Example receipt for a week with a missing figure">
+        <div class="rcpt-head"><b>Norte Studio · weekly update · Week 39</b><span>Mon Sep 28, 9:14 AM · 1 min 40 s</span></div>
+        <div class="rcpt-ready" role="note"><b>Not ready to send.</b> Ad spend is missing, so the report is an incomplete draft and no client email was drafted.</div>
+        <div class="rcpt-sum">
+          <div><h4>Status</h4>1 done · 1 partly done · 2 blocked</div>
+          <div><h4>Evidence</h4>3 verified by reading back · 1 not verifiable</div>
+        </div>
+        <div class="rcpt-wrap">
+          <table class="rtab">
+            <thead><tr><th scope="col">Step</th><th scope="col">Status (what it did)</th><th scope="col">Evidence (how it checked)</th></tr></thead>
+            <tbody>
+              <tr><td class="what">Ad spend figure</td><td><span class="pill st-block">Blocked · needs you</span></td><td><div class="ev"><span class="v no">Not verifiable</span><span>Cell C12 in “Norte – campaign data” is empty. There's no figure to check, so it wasn't guessed.</span></div></td></tr>
+              <tr><td class="what">Report</td><td><span class="pill st-part">Partly done · incomplete draft</span></td><td><div class="ev"><span class="v yes">Verified</span><span>Reopened “Norte Studio · Week 39 (DRAFT, incomplete)” in Drive: 3 of 4 sections filled. The spend line reads “[missing: needs input]”.</span></div></td></tr>
+              <tr><td class="what">Tracker</td><td><span class="pill st-done">Done · marked not ready</span></td><td><div class="ev"><span class="v yes">Verified</span><span>Read back row 14: Status = “Needs input: ad spend”, not “Ready for review”.</span></div></td></tr>
+              <tr><td class="what">Client email</td><td><span class="pill st-block">Blocked · held back</span></td><td><div class="ev"><span class="v yes">Verified</span><span>Checked Gmail drafts: no email to Leo Park exists. It won't draft the client email while the report is incomplete.</span></div></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="rcpt-next"><b>Next:</b> add the figure to C12, then resume the run from the notch. It finishes the report, marks the tracker “Ready for review”, and drafts the email for your OK, with a new receipt.</div>
+      </figure>
+      <div class="keys">
+        <div class="key"><h4>Status: what it did</h4><ul>
+          <li><span class="pill st-done">Done</span><span>Finished the step.</span></li>
+          <li><span class="pill st-part">Partly done</span><span>Finished part of it. The rest depends on something missing.</span></li>
+          <li><span class="pill st-wait">Waiting</span><span>Stopped where you asked to approve.</span></li>
+          <li><span class="pill st-block">Blocked</span><span>Couldn't or wouldn't continue. The receipt says why.</span></li>
+        </ul></div>
+        <div class="key"><h4>Evidence: how it checked</h4><ul>
+          <li><span class="v yes" style="font-weight:700;color:var(--ok)">Verified</span><span>Read the result back from the app through its connector.</span></li>
+          <li><span class="v part" style="font-weight:700;color:var(--wait)">Partly verified</span><span>Some checks passed, others couldn't be read back.</span></li>
+          <li><span class="v no" style="font-weight:700;color:var(--warn)">Not verifiable</span><span>Nothing reliable to check against. Look at it yourself.</span></li>
+        </ul></div>
+      </div>
+    </section>
+
+    <section id="privacy" aria-labelledby="pv-h">
+      <p class="eyebrow">Privacy and control · design rules</p>
+      <h2 id="pv-h">Always there. Only watching when you ask.</h2>
+      <p class="intro">An app that sits on your screen has to earn the space. These rules are part of the design. Understudy will be open source, so you'll be able to check them in the code.</p>
+      <div class="rules">
+        <div class="rule"><h3>It saves steps, not screen video</h3><p>It notes which app, field, and value you used. It never records what you type into password fields.</p></div>
+        <div class="rule"><h3>It only watches when you start it</h3><p>The dot in the notch pulses whenever it's watching. If the dot isn't pulsing, it isn't looking.</p></div>
+        <div class="rule"><h3>It asks before anything leaves</h3><p>Sending, paying, and deleting always wait for your OK. Click the notch at any time to stop a run.</p></div>
+        <div class="rule"><h3>Local unless you choose the cloud <span class="tag plan">Cloud: Planned</span></h3><p>Skills, memory, and receipts live on your Mac. Cloud AI and scheduled runs while your Mac sleeps will be opt-in parts of Pro.</p></div>
+      </div>
+    </section>
+    <nav class="next-link" aria-label="Next page"><a href="/rehearsal">← Rehearsal</a><a href="/what-exists">What exists →</a></nav>
+
