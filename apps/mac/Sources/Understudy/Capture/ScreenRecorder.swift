@@ -19,8 +19,10 @@ final class ScreenRecorder: NSObject, SCContentSharingPickerObserver, SCStreamOu
     private var wroteFrames = false
     // Touched only on the main thread.
     private var ready: ((Error?) -> Void)?
+    private let ended: () -> Void
 
-    init(url: URL) { self.url = url }
+    /// `ended` runs on the main thread if recording stops without `stop()`.
+    init(url: URL, ended: @escaping () -> Void) { self.url = url; self.ended = ended }
 
     /// Shows the picker, then starts recording what the person chose. `ready` runs on the main thread.
     @MainActor
@@ -132,8 +134,12 @@ final class ScreenRecorder: NSObject, SCContentSharingPickerObserver, SCStreamOu
     }
 
     func stream(_ stream: SCStream, didStopWithError error: Error) {
-        // The person stopped sharing from the menu bar, or the window closed. What was recorded is kept.
-        queue.async { self.stream = nil }
+        // The person stopped sharing from the menu bar, or the window closed. What was recorded is
+        // kept, and Watch stops (which calls `stop()` to finish the file).
+        queue.async {
+            self.stream = nil
+            DispatchQueue.main.async { self.ended() }
+        }
     }
 
     /// Runs on `queue`.

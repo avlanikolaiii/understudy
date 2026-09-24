@@ -13,12 +13,13 @@ final class ScreenCapture: CaptureSource {
         + "Turn on Understudy in System Settings → Privacy & Security → Accessibility, then start Watch again."
 
     func start(folder: URL, clock: @escaping () -> Double, onAction: @escaping (RecordedAction) -> Void,
-               ready: @escaping (Error?) -> Void) {
+               ended: @escaping () -> Void, ready: @escaping (Error?) -> Void) {
         guard AX.isTrusted else {
             AX.askForTrust()
             return ready(CaptureError(message: Self.accessibilityNeeded))
         }
-        let recorder = ScreenRecorder(url: folder.appendingPathComponent("screen.mov"))
+        // Sharing can end outside Understudy (the menu bar, or the recorded window closes): Watch stops too.
+        let recorder = ScreenRecorder(url: folder.appendingPathComponent("screen.mov"), ended: ended)
         screen = recorder
         recorder.start { [weak self] error in
             guard let self, self.screen === recorder else { return }

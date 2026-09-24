@@ -8,9 +8,12 @@ import UnderstudyCore
 protocol CaptureSource: AnyObject {
     /// Starts capturing into `folder`. Calls `ready(nil)` once capture runs, or `ready(error)`.
     /// Actions arrive in order, on the main actor; `clock` gives seconds since Watch started.
+    /// `ended` runs if capture ends on its own, e.g. the person stops sharing from the menu bar.
     func start(folder: URL, clock: @escaping () -> Double, onAction: @escaping (RecordedAction) -> Void,
-               ready: @escaping (Error?) -> Void)
-    /// Stops capturing. `done` gets the video's file name in `folder`, if the screen was recorded.
+               ended: @escaping () -> Void, ready: @escaping (Error?) -> Void)
+    /// Stops capturing. Actions still pending (e.g. typing not yet recorded) arrive before this
+    /// returns. `done` gets the video's file name in `folder`, if the screen was recorded; a video
+    /// finishes writing after Stop, so `done` comes later, possibly after another take has started.
     func stop(done: @escaping (String?) -> Void)
 }
 
@@ -67,6 +70,7 @@ final class WatchSession: ObservableObject {
         let take = id
         source.start(folder: recordingFolder, clock: { [weak self] in self.map { $0.now() - $0.startedAt } ?? 0 },
                      onAction: { [weak self] action in self?.record(action, take: take) },
+                     ended: { [weak self] in if self?.id == take { self?.stop() } },
                      ready: { [weak self] error in self?.began(error, take: take, automaticTicks: automaticTicks) })
     }
 
@@ -80,13 +84,23 @@ final class WatchSession: ObservableObject {
         guard isWatching else { return }
         advance()
         addRule()
-        phase = .stopped
         timer?.cancel(); timer = nil
-        let take = id, duration = now() - startedAt
-        save(duration: duration, video: nil)
+        let take = id, folder = recordingFolder, duration = now() - startedAt
+        // Still watching while the source stops, so its last actions (pending typing) are kept.
         source.stop { [weak self] video in
-            guard let self, self.id == take, video != nil else { return }
-            self.save(duration: duration, video: video)
+            guard let video else { return }
+            // The video finishes after Stop. If another take has started since, update this take's file.
+            if let self, self.id == take, let recording = self.recording {
+                self.save(Recording(id: take, startedAt: recording.startedAt, duration: duration,
+                                    actions: recording.actions, notes: recording.notes, video: video))
+            } else if var saved = Self.load(folder) {
+                saved.video = video
+                try? Self.write(saved, to: folder)
+            }
+        }
+        phase = .stopped
+        if recording?.id != take {
+            save(Recording(id: take, startedAt: startedDate, duration: duration, actions: actions, notes: rules, video: nil))
         }
     }
 
@@ -96,7 +110,7 @@ final class WatchSession: ObservableObject {
         guard !text.isEmpty else { return }
         rules.append(text)
         ruleDraft = ""
-        if let recording { save(duration: recording.duration, video: recording.video) }
+        if var recording { recording.notes = rules; save(recording) }
     }
 
     /// Ends the session. A finished recording stays in its folder for learning.
@@ -139,17 +153,26 @@ final class WatchSession: ObservableObject {
         phase = .idle
     }
 
-    private func save(duration: Double, video: String?) {
-        let finished = Recording(id: id, startedAt: startedDate, duration: duration, actions: actions, notes: rules, video: video)
+    private func save(_ finished: Recording) {
         recording = finished
         do {
-            let encoder = JSONEncoder()
-            encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-            encoder.dateEncodingStrategy = .iso8601
-            try encoder.encode(finished).write(to: recordingFolder.appendingPathComponent("recording.json"), options: .atomic)
+            try Self.write(finished, to: recordingFolder)
         } catch {
             problem = "The recording couldn't be saved: \(error.localizedDescription)"
         }
+    }
+
+    static func write(_ recording: Recording, to folder: URL) throws {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        encoder.dateEncodingStrategy = .iso8601
+        try encoder.encode(recording).write(to: folder.appendingPathComponent("recording.json"), options: .atomic)
+    }
+
+    static func load(_ folder: URL) -> Recording? {
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        return try? decoder.decode(Recording.self, from: Data(contentsOf: folder.appendingPathComponent("recording.json")))
     }
 }
 
@@ -170,20 +193,43 @@ final class ScriptedCapture: CaptureSource {
 
     /// When set, `start` fails with this message, as a missing permission would.
     var failure: String?
+    /// When set, `stop` reports a video with this name after the given action, as the recorder does.
+    var video: String?
+    /// Text "typed" but not yet recorded; `stop` records it first, as `ActionMonitor` does.
+    var pendingTyping: String?
     private var clock: () -> Double = { 0 }
     private var onAction: ((RecordedAction) -> Void)?
+    private var ended: (() -> Void)?
     private var next = 0
+    private var finishing: [() -> Void] = []
 
     func start(folder: URL, clock: @escaping () -> Double, onAction: @escaping (RecordedAction) -> Void,
-               ready: @escaping (Error?) -> Void) {
+               ended: @escaping () -> Void, ready: @escaping (Error?) -> Void) {
         if let failure { return ready(CaptureError(message: failure)) }
-        self.clock = clock; self.onAction = onAction; next = 0
+        self.clock = clock; self.onAction = onAction; self.ended = ended; next = 0
         ready(nil)
     }
 
     func stop(done: @escaping (String?) -> Void) {
-        onAction = nil
-        done(nil)
+        if let text = pendingTyping {
+            onAction?(RecordedAction(t: clock(), kind: .typing, app: "TextEdit", element: .init(role: "AXTextArea"), text: text))
+            pendingTyping = nil
+        }
+        onAction = nil; ended = nil
+        guard let name = video else { return done(nil) }
+        finishing.append { done(name) }
+    }
+
+    /// Finishes the videos of stopped takes, as the recorder does a moment after Stop.
+    func finishVideos() {
+        let pending = finishing
+        finishing = []
+        pending.forEach { $0() }
+    }
+
+    /// The person stops sharing the screen from macOS's menu bar.
+    func endSharing() {
+        ended?()
     }
 
     /// Emits the script's next action. Returns false when the script is done or nothing is recording.

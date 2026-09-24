@@ -264,7 +264,17 @@ final class SelfTest {
             ("shortcut", { await self.pressShortcut() }),
             ("relaunch", { self.checkPersistence() }),
         ]
-        if watch.isWatching { always.append(("tick", { self.advance(self.rng.int(1...9)) })) }
+        if watch.isWatching {
+            always.append(("tick", { self.advance(self.rng.int(1...9)) }))
+            // Sharing can be stopped from macOS's menu bar; Watch must stop and save.
+            always.append(("stopSharing", {
+                self.script.endSharing()
+                self.expect(self.app.env.watch.phase == .stopped && self.app.env.watch.recording != nil,
+                            "watch.stopsWhenSharingEnds", "when sharing ends, Watch must stop and save the take")
+            }))
+        }
+        // Videos finish writing a moment after Stop, sometimes after another take has started.
+        if rng.chance(50) { script.finishVideos() }
         // Accessibility access can be turned off in System Settings at any time (rarely), and a
         // person who sees Watch blocked usually turns it back on.
         if script.failure == nil ? rng.chance(3) : rng.chance(40) {
@@ -338,8 +348,13 @@ final class SelfTest {
 
     // MARK: Actions with their own expectations
 
-    /// The scripted capture that stands in for the screen during the self-test.
-    private var script: ScriptedCapture { app.env.capture as! ScriptedCapture }
+    /// The scripted capture that stands in for the screen during the self-test. It reports a
+    /// video for each take, finished later, as the recorder does.
+    private var script: ScriptedCapture {
+        let script = app.env.capture as! ScriptedCapture
+        script.video = "screen.mov"
+        return script
+    }
 
     /// Time passes during Watch, and the person does the next step of the task.
     private func advance(_ seconds: Int) {

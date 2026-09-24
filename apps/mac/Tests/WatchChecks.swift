@@ -69,6 +69,37 @@ struct WatchChecks {
         session.advance()
         precondition(session.phase == .idle && session.elapsedSeconds == 0)
 
+        // Typing still pending when Stop is pressed is kept, and saved.
+        session.start(automaticTicks: false)
+        capture.pendingTyping = "last words"
+        session.stop()
+        precondition(session.actions.last?.text == "last words" && session.recording?.actions.last?.text == "last words")
+        precondition(WatchSession.load(session.recordingFolder)?.actions.last?.text == "last words")
+
+        // Stopping sharing from macOS's menu bar stops Watch and saves the take.
+        session.start(automaticTicks: false)
+        capture.emitNext()
+        capture.endSharing()
+        precondition(session.phase == .stopped && session.recording?.actions.count == 1)
+        precondition(!capture.emitNext())
+
+        // The video finishes after Stop: it lands on its own take, even after Record again.
+        capture.video = "screen.mov"
+        session.start(automaticTicks: false)
+        session.stop()
+        capture.finishVideos()
+        precondition(session.recording?.video == "screen.mov" && WatchSession.load(session.recordingFolder)?.video == "screen.mov")
+        session.start(automaticTicks: false)
+        let earlier = session.recordingFolder
+        session.stop()
+        session.start(keepingRules: true, automaticTicks: false)
+        capture.finishVideos()
+        precondition(WatchSession.load(earlier)?.video == "screen.mov")
+        precondition(session.isWatching && session.recording == nil)
+        session.dismiss()
+        capture.finishVideos()
+        capture.video = nil
+
         // Password fields: nothing typed and no value is kept, even if a source reports them.
         let secret = RecordedAction(t: 1, kind: .typing, app: "Safari", element: .init(role: "AXTextField", subrole: "AXSecureTextField"),
                                     text: "hunter2", value: "hunter2")
@@ -83,7 +114,7 @@ struct WatchChecks {
         let stopped = live.elapsedSeconds
         RunLoop.main.run(until: Date().addingTimeInterval(1.1))
         precondition(live.elapsedSeconds == stopped && live.phase == .stopped)
-        print("PASS: start failure, ordered actions on Watch's clock, Stop saves the recording and notes, record again, reset, password redaction, and the timer")
+        print("PASS: start failure, ordered actions on Watch's clock, Stop saves the recording and notes, pending typing kept, sharing ended, late video on its own take, record again, reset, password redaction, and the timer")
     }
 }
 
