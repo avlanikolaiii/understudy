@@ -11,7 +11,10 @@ import Foundation
 /// - `text` (type), `keys` (keys, e.g. "⌘K", "↩", or "E"), `keyCode` (the exact key, when recorded),
 ///   `window` (the window it happened in)
 /// - `after`: seconds to wait before the step, from the pause in the recording
-/// - `reason`: why an unsupported step can't run
+/// - `context`: text near the control that tells it apart from others with the same name
+/// - `clicks`: "2" for a double-click
+/// - `reason`: why an unsupported step can't run; `reveal`: the bundle id of an app that hides
+///   its contents until Understudy reopens it in a mode that shows them
 public enum StepsFromRecording {
     public typealias Step = SkillDefinition.Step
 
@@ -38,6 +41,13 @@ public enum StepsFromRecording {
             if let last = steps.last, last.parameters["action"] == "activate", step.parameters["action"] == "activate",
                last.parameters["app"] == step.parameters["app"] {
                 steps[steps.count - 1].target.app = last.target.app ?? step.target.app
+                continue
+            }
+            // The second click of a double-click makes the step before it a double-click.
+            if (action.clicks ?? 1) > 1, let last = steps.last, last.parameters["action"] == step.parameters["action"],
+               last.target == step.target, last.parameters["context"] == step.parameters["context"] {
+                steps[steps.count - 1].parameters["clicks"] = "2"
+                steps[steps.count - 1].intent = step.intent.replacingOccurrences(of: "Press ", with: "Double-click ")
                 continue
             }
             step.parameters["after"] = String(format: "%.1f", after)
@@ -85,12 +95,19 @@ public enum StepsFromRecording {
                 return Step(id: "", intent: "Click in \(RecordedAction.quote(name))", executor: .accessibility,
                             target: target, effect: .read, evidence: .readBack, parameters: parameters)
             }
-            if pressable.contains(role), let name {
+            if pressable.contains(role) || action.element?.pressable == true, let name {
                 parameters["action"] = "press"
-                return Step(id: "", intent: "Press \(RecordedAction.quote(name)) in \(action.app)", executor: .accessibility,
+                if let context = action.element?.context { parameters["context"] = context }
+                let place = action.element?.context.map { " (\(RecordedAction.quote($0, limit: 40)))" } ?? ""
+                return Step(id: "", intent: "Press \(RecordedAction.quote(name))\(place) in \(action.app)", executor: .accessibility,
                             target: target, effect: effect(of: name), evidence: .none, parameters: parameters)
             }
-            parameters["reason"] = "This click has nothing to find it by (it needs the mouse). Delete the step, or record the task using the keyboard or named buttons."
+            if let hidden = action.hiddenIn {
+                parameters["reveal"] = hidden
+                parameters["reason"] = "\(action.app) hides its buttons from Understudy. Reopen it for Understudy (button below), then record this part again."
+            } else {
+                parameters["reason"] = "This click has nothing to find it by (it needs the mouse). Delete the step, or record the task using the keyboard or named buttons."
+            }
             return Step(id: "", intent: "Click in \(action.app)\(name.map { " on " + RecordedAction.quote($0) } ?? "")",
                         executor: .unsupported, target: target, effect: .write, evidence: .none, parameters: parameters)
         case .typing:

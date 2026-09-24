@@ -55,6 +55,25 @@ struct StepsChecks {
         precondition(unnamed.executor == .unsupported && unnamed.parameters["reason"]?.contains("mouse") == true)
         precondition(click("AXGroup", "Toolbar").executor == .unsupported)
 
+        // A click is identified by the element and the text around it, never by position: nine
+        // "Play" buttons are told apart by their album. A double-click stays one step.
+        let spotify = StepsFromRecording.steps(from: Recording(id: UUID(), startedAt: Date(), duration: 3, actions: [
+            A(t: 0, kind: .click, app: "Spotify", bundle: "com.spotify.client",
+              element: .init(role: "AXButton", description: "Play", context: "Bloom", pressable: true)),
+            A(t: 1, kind: .click, app: "Spotify", bundle: "com.spotify.client",
+              element: .init(role: "AXRow", title: "Liked Songs", context: "Recents", pressable: true)),
+            A(t: 1.2, kind: .click, app: "Spotify", bundle: "com.spotify.client",
+              element: .init(role: "AXRow", title: "Liked Songs", context: "Recents", pressable: true), clicks: 2),
+            A(t: 2, kind: .click, app: "Spotify", bundle: "com.spotify.client", element: .init(role: "AXScrollArea"),
+              hiddenIn: "com.spotify.client"),
+        ], notes: [], video: nil))
+        precondition(spotify.count == 3)
+        precondition(spotify[0].intent == "Press “Play” (“Bloom”) in Spotify" && spotify[0].parameters["context"] == "Bloom")
+        precondition(spotify[0].target.role == "AXButton" && spotify[0].target.title == "Play" && spotify[0].parameters["action"] == "press")
+        precondition(spotify[1].parameters["clicks"] == "2" && spotify[1].intent.hasPrefix("Double-click “Liked Songs”"))
+        precondition(spotify[2].executor == .unsupported && spotify[2].parameters["reveal"] == "com.spotify.client")
+        precondition(!spotify.contains { $0.parameters.keys.contains { $0.lowercased().contains("position") || $0 == "x" || $0 == "y" } })
+
         // Passwords and selections can't be replayed; ⌘↩ sends.
         let other = StepsFromRecording.steps(from: Recording(id: UUID(), startedAt: Date(), duration: 1, actions: [
             A(t: 0, kind: .typing, app: "Safari", element: .init(role: "AXTextField", subrole: "AXSecureTextField"), text: "secret"),
@@ -71,6 +90,6 @@ struct StepsChecks {
         let restored = try! JSONDecoder().decode(SkillDefinition.self, from: JSONEncoder().encode(definition))
         precondition(restored == definition && restored.recording == take.id)
         precondition(StepsFromRecording.steps(from: Recording(id: UUID(), startedAt: Date(), duration: 0, actions: [], notes: [], video: nil)).isEmpty)
-        print("PASS: a real take becomes seven steps, letters outside text fields are key presses, Dock clicks merge, pauses kept, named presses, approval words, unsupported clicks, passwords, selections, recording link")
+        print("PASS: a real take becomes seven steps, letters outside text fields are key presses, clicks found by element and context (not position), double-clicks, apps that hide their contents, Dock clicks merge, pauses kept, named presses, approval words, unsupported clicks, passwords, selections, recording link")
     }
 }

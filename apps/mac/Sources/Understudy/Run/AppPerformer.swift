@@ -43,9 +43,20 @@ final class AppPerformer: StepPerformer {
                     return done(StepOutcome(.failed, .none, "\(name) didn't open: \(error?.localizedDescription ?? "unknown error")."))
                 }
                 app.activate()
+                AX.reveal(app)
                 poll { NSWorkspace.shared.frontmostApplication?.processIdentifier == app.processIdentifier } then: { inFront in
-                    done(inFront ? StepOutcome(.done, .verified, "\(name) is in front.")
-                                 : StepOutcome(.failed, .none, "\(name) opened but didn't come to the front."))
+                    guard inFront else { return done(StepOutcome(.failed, .none, "\(name) opened but didn't come to the front.")) }
+                    // An app that hides its buttons (e.g. Spotify) is reopened so the next steps can find them.
+                    guard AX.engine(of: app) == .chromiumEmbedded, AX.hidesContents(app), let bundle = app.bundleIdentifier else {
+                        return done(StepOutcome(.done, .verified, "\(name) is in front."))
+                    }
+                    AX.reopenRevealed(bundle: bundle) { reopened in
+                        guard reopened else { return done(StepOutcome(.failed, .none, "\(name) couldn't be reopened so Understudy can see its buttons.")) }
+                        self.poll { NSRunningApplication.runningApplications(withBundleIdentifier: bundle).first.map { !AX.hidesContents($0) && NSWorkspace.shared.frontmostApplication?.bundleIdentifier == bundle } ?? false } then: { ready in
+                            done(ready ? StepOutcome(.done, .verified, "\(name) is in front, reopened so Understudy can see its buttons.")
+                                       : StepOutcome(.failed, .none, "\(name) was reopened but still hides its buttons."))
+                        }
+                    }
                 }
             }
         }
@@ -58,7 +69,7 @@ final class AppPerformer: StepPerformer {
         }
         var found: AXUIElement?
         poll({ found = AX.find(in: app.processIdentifier, role: step.target.role, name: step.target.title,
-                               identifier: step.target.identifier); return found != nil }) { _ in
+                               identifier: step.target.identifier, context: step.parameters["context"]); return found != nil }) { _ in
             guard let element = found else {
                 return done(StepOutcome(.failed, .none, "Couldn't find \(RecordedAction.quote(label)) in \(app.localizedName ?? "the app")."))
             }
@@ -68,8 +79,12 @@ final class AppPerformer: StepPerformer {
                 done(focused ? StepOutcome(.done, .verified, "The cursor is in \(RecordedAction.quote(label)).")
                              : StepOutcome(.done, .notVerifiable, "Clicked into \(RecordedAction.quote(label)); focus couldn't be read back."))
             } else {
-                let result = AXUIElementPerformAction(element, kAXPressAction as CFString)
-                done(result == .success ? StepOutcome(.done, .notVerifiable, "Pressed \(RecordedAction.quote(label)). What it did can't be read back.")
+                // Pressed through Accessibility, wherever it is on screen; a double-click presses twice.
+                let times = Int(step.parameters["clicks"] ?? "1") ?? 1
+                var result = AXUIElementPerformAction(element, kAXPressAction as CFString)
+                if times > 1, result == .success { usleep(80_000); result = AXUIElementPerformAction(element, kAXPressAction as CFString) }
+                let what = times > 1 ? "Double-clicked" : "Pressed"
+                done(result == .success ? StepOutcome(.done, .notVerifiable, "\(what) \(RecordedAction.quote(label)). What it did can't be read back.")
                                         : StepOutcome(.failed, .none, "\(RecordedAction.quote(label)) couldn't be pressed."))
             }
         }

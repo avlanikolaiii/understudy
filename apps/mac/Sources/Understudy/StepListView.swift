@@ -32,6 +32,11 @@ struct StepListView: View {
                         if step.executor == .unsupported, let reason = step.parameters["reason"] {
                             Label(reason, systemImage: "exclamationmark.triangle").font(.caption).foregroundStyle(.orange)
                                 .fixedSize(horizontal: false, vertical: true)
+                            if let bundle = step.parameters["reveal"] {
+                                Button("Reopen \(step.parameters["app"] ?? "the app") for Understudy") {
+                                    AX.reopenRevealed(bundle: bundle) { _ in }
+                                }.controlSize(.small)
+                            }
                         }
                         if let edits, step.parameters["action"] == "type" {
                             TextField("Text to type", text: Binding(get: { step.parameters["text"] ?? "" },
