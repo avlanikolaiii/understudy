@@ -7,6 +7,8 @@ struct MainWindowView: View {
     @ObservedObject var ui: WorkspaceState
     @ObservedObject var watch: WatchSession
     @ObservedObject var activity: NotchActivity
+    let runner: RunController
+    let scheduler: Scheduler
     var openSettings: () -> Void = {}
 
     private var activeSkill: Skill { ui.activeSkill(in: library) }
@@ -176,7 +178,11 @@ struct MainWindowView: View {
             }
             Divider()
             if !activeSkill.definition.steps.isEmpty {
-                Text("Steps of \(activeSkill.name)").font(.system(size: 20, weight: .semibold))
+                RunPanelView(runner: runner, skill: activeSkill, openReceipts: { ui.selectedReceipt = runner.lastReceipt; ui.page = .results })
+                TriggerEditorView(ui: ui, scheduler: scheduler, skill: activeSkill) { trigger in
+                    ui.saveTrigger(trigger, of: activeSkill, library: library)
+                }
+                Text("Steps").font(.system(size: 17, weight: .semibold))
                 StepListView(steps: activeSkill.definition.steps)
             } else if !activeSkill.isSample {
                 Text("\(activeSkill.name) has no steps yet").font(.system(size: 20, weight: .semibold))
@@ -203,7 +209,7 @@ struct MainWindowView: View {
             HStack(spacing: 12) {
                 primary("Rehearse sample", symbol: "play.fill") {
                     ui.rehearseActiveSkill(library: library, activity: activity)
-                }.disabled(activity.isRehearsing || !library.canRehearse)
+                }.disabled(activity.isRehearsing || !library.canRehearse || runner.isRunning)
                 if activity.isRehearsing {
                     ProgressView().controlSize(.small)
                     Text("Rehearsing in the notch (read-only)…").font(.callout).foregroundStyle(.secondary)
@@ -218,9 +224,42 @@ struct MainWindowView: View {
             if let receipt {
                 if library.receipts.count > 1 {
                     Picker("Rehearsal", selection: Binding(get: { receipt.id }, set: { ui.selectedReceipt = $0 })) {
-                        ForEach(library.receipts) { item in Text("\(item.client) · \(item.status) · \(item.date.formatted(date: .omitted, time: .standard))").tag(item.id) }
+                        ForEach(library.receipts) { item in Text("\(item.isRun ? item.skillName : item.client) · \(item.status) · \(item.date.formatted(date: .omitted, time: .standard))").tag(item.id) }
                     }
                 }
+                if receipt.isRun { runReceipt(receipt) } else { sampleReceipt(receipt) }
+            } else {
+                VStack(spacing: 16) {
+                    Image(systemName: "checkmark.rectangle").font(.system(size: 40)).foregroundStyle(Color.secondary)
+                    Text("Your first receipt starts with a run or a rehearsal.").font(.system(size: 18, weight: .medium))
+                    primary("Go to your skills", symbol: "arrow.right") { ui.page = .skills }
+                }.frame(maxWidth: .infinity).padding(.vertical, 70)
+            }
+        }
+    }
+
+    /// A real run: each step's status, and its evidence, kept apart.
+    private func runReceipt(_ receipt: Receipt) -> some View {
+        VStack(alignment: .leading, spacing: 22) {
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 8) {
+                    badge("RUN RECEIPT · \(receipt.date.formatted(date: .abbreviated, time: .shortened))")
+                    Text(receipt.status).font(.system(size: 26, weight: .semibold))
+                    Text(receipt.skillName).font(.system(size: 13)).foregroundStyle(Color.secondary)
+                }
+                Spacer()
+                Image(systemName: receipt.readyToSend ? "checkmark.circle" : "exclamationmark.circle")
+                    .font(.system(size: 32)).foregroundStyle(receipt.readyToSend ? Color.accentColor : Color.orange)
+            }
+            ForEach(Array(receipt.steps.enumerated()), id: \.offset) { index, step in
+                evidence("\(index + 1). \(step.step)", step.status, step.evidence)
+            }
+            Button("Back to skills") { ui.page = .skills }.buttonStyle(.bordered)
+        }
+    }
+
+    private func sampleReceipt(_ receipt: Receipt) -> some View {
+        VStack(alignment: .leading, spacing: 22) {
                 HStack(alignment: .top) {
                     VStack(alignment: .leading, spacing: 8) {
                         badge("SAMPLE RECEIPT")
@@ -246,13 +285,6 @@ struct MainWindowView: View {
                 }
                 Text("Export writes only to the local location you choose. An incomplete report remains labeled as a draft.")
                     .font(.system(size: 12)).foregroundStyle(Color.secondary)
-            } else {
-                VStack(spacing: 16) {
-                    Image(systemName: "checkmark.rectangle").font(.system(size: 40)).foregroundStyle(Color.secondary)
-                    Text("Your first receipt starts with a rehearsal.").font(.system(size: 18, weight: .medium))
-                    primary("Explore a sample skill", symbol: "arrow.right") { ui.page = .skills }
-                }.frame(maxWidth: .infinity).padding(.vertical, 70)
-            }
         }
     }
 

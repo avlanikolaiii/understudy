@@ -25,6 +25,16 @@ extension WorkspaceState {
         watch.dismiss(); clearDraft(); teachingStep = 0; page = .skills
     }
 
+    /// "Save" under When it runs.
+    func saveTrigger(_ trigger: SkillDefinition.Trigger, of skill: Skill, library: SkillLibrary) {
+        var updated = skill
+        updated.definition.trigger = trigger
+        library.update(updated) { [weak self] saved in
+            self?.selectedSkill = saved
+            self?.triggerDraft = saved.definition.trigger
+        }
+    }
+
     /// "Create steps from latest recording" on the Skills page, for a skill saved without steps.
     func addStepsFromLatestRecording(to skill: Skill, library: SkillLibrary, watch: WatchSession) {
         guard !skill.isSample, skill.definition.steps.isEmpty, let recording = watch.latestRecording() else { return }

@@ -67,13 +67,19 @@ struct Receipt: Codable, Identifiable {
     var report: String
     var rules: String
     var exportPath: String?
+    /// For a real run: what each step did and how it was checked. Nil for a sample rehearsal.
+    var ranSteps: [ReceiptStep]?
+    /// For a real run: "Completed", "Blocked · needs you", or "Stopped".
+    var outcome: String?
 
-    var status: String { missingSpend ? "Needs input" : "Ready for your review" }
-    var readyToSend: Bool { !missingSpend }
+    var isRun: Bool { ranSteps != nil }
+    var status: String { isRun ? outcome ?? "Finished" : missingSpend ? "Needs input" : "Ready for your review" }
+    var readyToSend: Bool { isRun ? outcome == "Completed" : !missingSpend }
 
     /// One line per step, used by the notch strip and stored in `receipts.steps`.
     var steps: [ReceiptStep] {
-        missingSpend ? [
+        if let ranSteps { return ranSteps }
+        return missingSpend ? [
             ReceiptStep(step: "Ad spend", status: "Blocked · needs you", evidence: "Not verifiable: the sample figure is missing, so it wasn't guessed."),
             ReceiptStep(step: "Report", status: "Partly done · incomplete draft", evidence: "Sample only: spend and cost per lead read “[missing: …]”."),
             ReceiptStep(step: "Tracker", status: "Needs input", evidence: "Not connected in this prototype."),

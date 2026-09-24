@@ -58,6 +58,29 @@ enum AX {
                                identifier: string(element, kAXIdentifierAttribute, limit: 80))
     }
 
+    /// Finds a control in the app's windows and menu bar: by identifier when it has one, otherwise
+    /// or by role and name (title or description), the way Watch recorded it. Breadth-first, bounded.
+    static func find(in pid: pid_t, role: String?, name: String?, identifier: String?) -> AXUIElement? {
+        guard identifier != nil || name != nil else { return nil }
+        let app = AXUIElementCreateApplication(pid)
+        var queue: [AXUIElement] = []
+        if let window = attribute(app, kAXFocusedWindowAttribute) { queue.append(window as! AXUIElement) }
+        queue += (attribute(app, kAXWindowsAttribute) as? [AXUIElement]) ?? []
+        if let menuBar = attribute(app, kAXMenuBarAttribute) { queue.append(menuBar as! AXUIElement) }
+        var visited = 0
+        while !queue.isEmpty, visited < 5_000 {
+            let element = queue.removeFirst()
+            visited += 1
+            if let identifier, string(element, kAXIdentifierAttribute, limit: 200) == identifier { return element }
+            if let name, role == nil || string(element, kAXRoleAttribute) == role,
+               string(element, kAXTitleAttribute, limit: 200) == name || string(element, kAXDescriptionAttribute, limit: 200) == name {
+                return element
+            }
+            queue += (attribute(element, kAXChildrenAttribute) as? [AXUIElement]) ?? []
+        }
+        return nil
+    }
+
     static func focusedWindowTitle(pid: pid_t) -> String? {
         guard let window = attribute(AXUIElementCreateApplication(pid), kAXFocusedWindowAttribute) else { return nil }
         return string(window as! AXUIElement, kAXTitleAttribute, limit: 120)

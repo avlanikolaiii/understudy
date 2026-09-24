@@ -11,7 +11,7 @@ final class WorkspaceController: NSObject {
     private var bag = Set<AnyCancellable>()
 
     init(auth: AppModel, library: SkillLibrary, ui: WorkspaceState, watch: WatchSession, activity: NotchActivity,
-         openSettings: @escaping () -> Void) {
+         runner: RunController, scheduler: Scheduler, openSettings: @escaping () -> Void) {
         self.ui = ui
         self.watch = watch
         window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1060, height: 780),
@@ -22,7 +22,7 @@ final class WorkspaceController: NSObject {
         window.isReleasedWhenClosed = false
         window.minSize = NSSize(width: 820, height: 600)
         window.contentViewController = NSHostingController(rootView: MainWindowView(
-            auth: auth, library: library, ui: ui, watch: watch, activity: activity, openSettings: openSettings))
+            auth: auth, library: library, ui: ui, watch: watch, activity: activity, runner: runner, scheduler: scheduler, openSettings: openSettings))
         window.toolbarStyle = .unified
         window.center()
         window.setFrameAutosaveName("UnderstudyWorkspace")

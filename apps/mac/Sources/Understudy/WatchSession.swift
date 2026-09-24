@@ -43,6 +43,8 @@ final class WatchSession: ObservableObject {
 
     private let source: CaptureSource
     private let folder: URL
+    /// Why Watch can't start right now (e.g. a skill is running and would type into the recording).
+    var blocker: () -> String? = { nil }
     private let now: () -> TimeInterval
     private var timer: AnyCancellable?
     private var startedAt: TimeInterval = 0
@@ -65,6 +67,7 @@ final class WatchSession: ObservableObject {
     /// Starts a new recording. `keepingRules` keeps the notes from the previous take.
     func start(keepingRules: Bool = false, automaticTicks: Bool = true) {
         guard phase == .idle || phase == .stopped else { return }
+        if let reason = blocker() { problem = reason; return }
         if keepingRules { addRule() } else { rules = []; ruleDraft = "" }
         id = UUID(); recording = nil; problem = nil
         actions = []; elapsedSeconds = 0
@@ -233,6 +236,8 @@ final class ScriptedCapture: CaptureSource {
                        element: .init(role: "AXTextArea"), text: "| Impressions | 1,200 |"),
         RecordedAction(t: 0, kind: .click, app: "TextEdit", bundle: "com.apple.TextEdit", window: "weekly-update.md",
                        element: .init(role: "AXButton", title: "Save")),
+        RecordedAction(t: 0, kind: .click, app: "Mail", bundle: "com.apple.mail", window: "Weekly update",
+                       element: .init(role: "AXButton", title: "Send")),
     ]
 
     /// When set, `start` fails with this message, as a missing permission would.

@@ -1,5 +1,6 @@
 import Combine
 import Foundation
+import UnderstudyCore
 
 /// One line in the notch strip: the app, what happened, and an optional status at the end.
 struct NotchRow: Identifiable, Equatable {
@@ -17,7 +18,7 @@ struct NotchRow: Identifiable, Equatable {
 /// after it are still simulated and say so.
 @MainActor
 final class NotchActivity: ObservableObject {
-    enum Mode: Equatable { case idle, watching, stopped, learned, rehearsing, receipt, demo }
+    enum Mode: Equatable { case idle, watching, stopped, learned, rehearsing, scheduled, running, receipt, demo }
     enum Dot: Equatable { case steady, pulse, rehearse }
 
     @Published private(set) var mode: Mode = .idle
@@ -60,6 +61,7 @@ final class NotchActivity: ObservableObject {
         switch mode {
         case .watching, .stopped: .teach
         case .learned: .skills
+        case .running, .scheduled: .skills
         case .rehearsing, .receipt: .results
         case .idle, .demo: .home
         }
@@ -182,8 +184,72 @@ final class NotchActivity: ObservableObject {
 
     /// Clears a New skill or Receipt strip. Watch and rehearsal keep going.
     func dismiss() {
-        guard overlayActive, mode != .rehearsing else { return }
+        // A run, a rehearsal, and the countdown before a triggered run aren't dismissed by a click:
+        // the click opens the run, or (during the countdown) cancels it.
+        guard overlayActive, mode != .rehearsing, mode != .running, mode != .scheduled else { return }
         endOverlay()
+    }
+
+    // MARK: Running a skill (real)
+
+    static let runFooter = "Running on this Mac · click to open"
+    static let runReceiptFooter = "Receipt saved · click to see it"
+
+    /// The run in progress, kept so the strip returns to it after another message (e.g. New skill).
+    private var run: (name: String, steps: [SkillDefinition.Step], results: [StepOutcome], current: Int?, pause: RunEngine.Pause?)?
+
+    /// The run in progress: the steps done so far and the one running or waiting for the person.
+    func showRun(_ name: String, steps: [SkillDefinition.Step], results: [StepOutcome], current: Int?, pause: RunEngine.Pause?) {
+        run = (name, steps, results, current, pause)
+        if mode != .running { _ = beginOverlay() }
+        var rows: [NotchRow] = []
+        for (index, step) in steps.enumerated() where results[index].status != .notRun || index == current {
+            let app = step.parameters["app"] ?? "Step"
+            switch results[index].status {
+            case .done: rows.append(row(app, step.intent, end: "✓", endTone: .ok))
+            case .skipped: rows.append(row(app, step.intent, end: "skipped"))
+            case .blocked, .failed: rows.append(row(app, step.intent, end: "needs you", endTone: .hold))
+            case .notRun: rows.append(row(app, step.intent, end: pause == nil ? "…" : "waiting", endTone: pause == nil ? .plain : .hold))
+            }
+        }
+        let finished = results.filter { $0.status != .notRun }.count
+        let label = pause == .approval ? "Needs your OK" : pause == .confirmation ? "Next step?" : "Running"
+        show(.running, label: label, detail: pause != nil ? current.map { steps[$0].intent } : name,
+             meta: "\(finished)/\(steps.count)", dot: pause == nil ? .pulse : .steady, rows: rows, footer: Self.runFooter)
+    }
+
+    /// The end of a run: its receipt, for a few seconds.
+    func showRunReceipt(_ receipt: Receipt) {
+        run = nil
+        let token = beginOverlay()
+        let rows = receipt.steps.enumerated().map { index, step in
+            row("Step \(index + 1)", step.step, end: step.status == "Done" ? "✓" : step.status == "Skipped" || step.status == "Not run" ? "–" : "needs you",
+                endTone: step.status == "Done" ? .ok : step.status == "Skipped" || step.status == "Not run" ? .plain : .hold)
+        }
+        show(.receipt, label: receipt.status == "Completed" ? "Done" : receipt.status, detail: receipt.skillName, meta: "",
+             dot: .steady, rows: rows, footer: Self.runReceiptFooter)
+        later(token, 15) { $0.endOverlay() }
+    }
+
+    static let countdownFooter = "Triggered run · click the notch to cancel"
+
+    /// The countdown before a triggered run. Clicking the notch cancels it (see `Scheduler`).
+    func showCountdown(_ name: String, seconds: Int) {
+        if mode != .scheduled { _ = beginOverlay() }
+        show(.scheduled, label: "Running in \(seconds)s", detail: name, meta: "", dot: .steady,
+             rows: [row("Understudy", "will open apps and type for you", end: "\(seconds)")], footer: Self.countdownFooter)
+    }
+
+    func hideCountdown() {
+        if mode == .scheduled { endOverlay() }
+    }
+
+    /// A triggered run that couldn't start, and why, for a few seconds.
+    func showRunProblem(_ name: String, reason: String) {
+        let token = beginOverlay()
+        show(.receipt, label: "Didn't run", detail: name, meta: "", dot: .steady,
+             rows: [row("Why", reason, end: "needs you", endTone: .hold)], footer: Self.runReceiptFooter)
+        later(token, 8) { $0.endOverlay() }
     }
 
     // MARK: Landing-page demonstration (`--notch-demo`)
@@ -293,6 +359,7 @@ final class NotchActivity: ObservableObject {
 
     private func endOverlay() {
         cancelOverlay()
+        if let run { return showRun(run.name, steps: run.steps, results: run.results, current: run.current, pause: run.pause) }
         watchChanged()
     }
 

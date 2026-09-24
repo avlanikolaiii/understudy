@@ -1,4 +1,5 @@
 import AppKit
+import UnderstudyCore
 
 /// `--self-test[=SESSIONS,SEED] [--self-test-out=DIR]`
 ///
@@ -65,6 +66,8 @@ final class SelfTest {
     private var nodes: [String: Int] = [:]
     private var edges: [String: Int] = [:]
     private var failures: [[String: Any]] = []
+    /// Steps the simulated person approved while a run waited for them (by skill step id).
+    private var approved: Set<String> = []
     private var trail: [String] = []
     private var snapshots: [String] = []
     private var session = 0
@@ -277,6 +280,11 @@ final class SelfTest {
         }
         // Videos finish writing a moment after Stop, sometimes after another take has started.
         if rng.chance(50) { script.finishVideos() }
+        // A skill's trigger fires: its time comes, its app opens, or a file lands in its folder.
+        let scheduler = app.env.scheduler
+        if let skill = scheduler.scheduled.first(where: { _ in rng.chance(50) }) ?? scheduler.scheduled.first, rng.chance(30) {
+            always.append(("triggerFires", { await self.triggerFires(skill) }))
+        }
         // Accessibility access can be turned off in System Settings at any time (rarely), and a
         // person who sees Watch blocked usually turns it back on.
         if script.failure == nil ? rng.chance(3) : rng.chance(40) {
@@ -322,18 +330,42 @@ final class SelfTest {
                 if !ui.draftSteps.isEmpty { onScreen.append(("editStep", { self.editStep() })) }
             case .skills:
                 let active = ui.activeSkill(in: library)
+                let runner = app.env.runner
                 onScreen.append(("selectSkill", { ui.selectedSkill = self.rng.pick(library.skills) }))
+                if !active.definition.steps.isEmpty {
+                    // The run panel: Run now, Test step by step, then Stop, Approve, and Skip while it runs.
+                    if !runner.isRunning {
+                        onScreen.append(("runNow", { await self.run(active, mode: .run) }))
+                        onScreen.append(("runStepByStep", { await self.run(active, mode: .stepByStep) }))
+                    } else if runner.skill?.id == active.id {
+                        onScreen.append(("stopRun", { await self.stopRun() }))
+                        if runner.pause != nil {
+                            onScreen.append(("approveStep", { await self.approveStep() }))
+                            onScreen.append(("skipStep", { runner.skip() }))
+                        }
+                    }
+                    // When it runs: pick a kind, fill it in, save.
+                    onScreen.append(("editTrigger", { await self.editTrigger(active) }))
+                    if !runner.isRunning && runner.skill?.id == active.id && !runner.results.isEmpty {
+                        onScreen.append(("seeRunReceipt", { ui.selectedReceipt = runner.lastReceipt; ui.page = .results }))
+                    }
+                }
                 if active.definition.steps.isEmpty {
                     // The sample rehearsal shows only for skills without recorded steps.
                     onScreen.append(("pickCase", { ui.scenario = self.rng.pick(SampleCase.allCases) }))
                     // "Rehearse sample" is disabled while a rehearsal runs.
-                    if !activity.isRehearsing && library.canRehearse { onScreen.append(("rehearse", { await self.rehearse() })) }
+                    if !activity.isRehearsing && library.canRehearse && !app.env.runner.isRunning {
+                        onScreen.append(("rehearse", { await self.rehearse() }))
+                    }
                     if !active.isSample && watch.latestRecording() != nil {
                         onScreen.append(("createSteps", { await self.createSteps(for: active) }))
                     }
                 }
             case .results:
-                if !library.receipts.isEmpty {
+                let shown = library.receipts.first { $0.id == ui.selectedReceipt } ?? library.receipts.first
+                if shown?.isRun == true {
+                    onScreen.append(("backToSkills", { ui.page = .skills }))
+                } else if shown != nil {
                     onScreen.append(("export", { self.export() }))
                     onScreen.append(("tryAnotherCase", { ui.page = .skills }))
                 } else {
@@ -384,13 +416,22 @@ final class SelfTest {
             expect(!app.env.watch.isWatching && app.env.ui.page == .teach && app.env.ui.teachingStep == 2, "shortcut.stopsWatch",
                    "pressing the shortcut during Watch must stop it and open Review")
         } else if before == .idle || before == .demo {
-            expect(app.env.watch.isWatching || (script.failure != nil && app.env.watch.problem != nil), "shortcut.startsWatch",
+            expect(app.env.watch.isWatching || app.env.watch.problem != nil, "shortcut.startsWatch",
                    "pressing the shortcut when idle must start Watch, or say why it can't")
         }
     }
 
     private func tapNotch() async {
         let expected = app.env.activity.page
+        if app.env.activity.mode == .scheduled, let counting = app.env.scheduler.pending {
+            // During the countdown before a triggered run, a click cancels it. (Another queued
+            // skill may start its own countdown next.)
+            app.notch.tap()
+            await pump(10)
+            expect(app.env.scheduler.pending?.id != counting.id && !(app.env.runner.isRunning && app.env.runner.skill?.id == counting.id),
+                   "trigger.clickCancels", "clicking the notch during the countdown cancels that run")
+            return
+        }
         app.notch.tap()
         await pump(30)
         expect(mainWindow?.isVisible == true, "notch.tapOpensWindow", "clicking the notch must show the main window")
@@ -424,7 +465,9 @@ final class SelfTest {
         expect(app.env.library.skills.last?.definition.steps == steps && app.env.ui.draftSteps.isEmpty, "save.keepsReviewedSteps",
                "the saved skill must have exactly the reviewed steps")
         expect(app.env.ui.page == .skills && !app.env.watch.isPresented, "save.opensSkills", "saving must end Watch and open Skills")
-        expect(app.env.activity.mode == .learned, "save.showsNewSkill", "the notch must show New skill after saving")
+        // A triggered run's countdown or a run in progress takes precedence over the message.
+        expect(app.env.activity.mode == .learned || app.env.scheduler.pending != nil || app.env.runner.isRunning,
+               "save.showsNewSkill", "the notch must show New skill after saving")
     }
 
     /// Delete, move up, or retype one reviewed step.
@@ -451,6 +494,97 @@ final class SelfTest {
             }
         }
     }
+
+    /// Choose when a skill runs, as the editor allows, and save it.
+    private func editTrigger(_ skill: Skill) async {
+        let ui = app.env.ui, scheduler = app.env.scheduler
+        ui.editTrigger(of: skill)
+        let kind = rng.pick(SkillDefinition.Trigger.Kind.allCases)
+        ui.triggerDraft.kind = kind
+        switch kind {
+        case .schedule:
+            ui.triggerDraft.hour = rng.int(0...23); ui.triggerDraft.minute = rng.int(0...59)
+            for _ in 0..<rng.int(0...3) { ui.toggleWeekday(rng.int(1...7)) }
+        case .interval: ui.triggerDraft.everyHours = rng.int(1...24)
+        case .appOpened: ui.triggerDraft.app = "com.apple.TextEdit"; ui.triggerDraft.appName = "TextEdit"
+        case .fileAdded: ui.triggerDraft.folder = options.recordings.path
+        case .manual: break
+        }
+        let trigger = ui.finishedTrigger(device: scheduler.device)
+        guard trigger.isComplete else { return }   // Save is disabled until it is
+        ui.saveTrigger(trigger, of: skill, library: app.env.library)
+        await pump(20)
+        let saved = app.env.library.skills.first { $0.id == skill.id }?.definition.trigger
+        expect(saved == trigger && (kind == .manual || saved?.device == scheduler.device), "trigger.saved",
+               "a saved trigger is exactly what was chosen, set on this Mac")
+        if kind == .schedule || kind == .interval {
+            expect(scheduler.nextRun(of: app.env.library.skills.first { $0.id == skill.id } ?? skill) != nil, "trigger.nextRun",
+                   "a schedule or interval always has a next run")
+        }
+    }
+
+    /// A trigger fires. The run waits its turn, counts down in the notch, then runs.
+    private func triggerFires(_ skill: Skill) async {
+        let scheduler = app.env.scheduler, runner = app.env.runner
+        let wasRunning = runner.isRunning
+        let watching = app.env.watch.isWatching
+        scheduler.fire(skill)
+        await pump(5)
+        if watching {
+            // It waits while Watch records: no countdown over the recording.
+            expect(app.env.activity.mode != .scheduled && !(runner.isRunning && runner.skill?.id == skill.id), "trigger.waitsForWatch",
+                   "a triggered run waits while Watch records")
+        } else if !wasRunning && scheduler.pending?.id == skill.id {
+            await waitUntil(0.5) { self.app.env.activity.mode == .scheduled || runner.isRunning || scheduler.pending == nil }
+            expect(app.env.activity.mode == .scheduled || runner.isRunning || scheduler.pending == nil, "trigger.countdownFirst",
+                   "a triggered run counts down in the notch before it starts")
+        }
+    }
+
+    /// Run now / Test step by step. A step can fail now and then, as when a control isn't found.
+    private func run(_ skill: Skill, mode: RunEngine.Mode) async {
+        let runner = app.env.runner, library = app.env.library
+        let before = library.receipts.count
+        approved = []
+        if rng.chance(15) { performer.failNext = "Couldn't find the control." }
+        let watching = app.env.watch.isWatching
+        let started = runner.start(skill, mode: mode)
+        if watching {
+            expect(!started && runner.problem != nil, "run.notDuringWatch", "a run never starts while Watch records")
+            return
+        }
+        expect(started && runner.skill?.id == skill.id, "run.starts", "Run starts a skill that has steps")
+        await pump(30)
+        checkRunEnded(before: before)
+    }
+
+    private func approveStep() async {
+        let runner = app.env.runner
+        if let index = runner.current { approved.insert(runner.steps[index].id) }
+        let before = app.env.library.receipts.count
+        runner.approve()
+        await pump(30)
+        checkRunEnded(before: before)
+    }
+
+    private func stopRun() async {
+        let before = app.env.library.receipts.count
+        app.env.runner.stop()
+        await pump(10)
+        expect(!app.env.runner.isRunning && app.env.library.receipts.count == before + 1 && app.env.library.receipts.first?.outcome == "Stopped",
+               "run.stopSavesReceipt", "Stop ends the run and saves a receipt that says it was stopped")
+    }
+
+    /// A run that ended has exactly one new receipt, from a real run, with one line per step.
+    private func checkRunEnded(before: Int) {
+        let runner = app.env.runner
+        guard !runner.isRunning else { return }
+        let receipt = app.env.library.receipts.first
+        expect(app.env.library.receipts.count == before + 1 && receipt?.isRun == true && receipt?.steps.count == runner.steps.count,
+               "run.oneReceipt", "every finished run saves exactly one receipt with a line per step")
+    }
+
+    private var performer: ScriptedPerformer { app.env.performer as! ScriptedPerformer }
 
     private func createSteps(for skill: Skill) async {
         app.env.ui.addStepsFromLatestRecording(to: skill, library: app.env.library, watch: app.env.watch)
@@ -522,9 +656,21 @@ final class SelfTest {
             expect(activity.footer == NotchActivity.watchFooter, "notch.honestLabel", "Watch must say it records on this Mac, never passwords")
         case .learned where activity.footer == NotchActivity.learnedFooter:
             break   // a skill whose steps came from a recording
+        case .running:
+            expect(activity.footer == NotchActivity.runFooter, "notch.honestLabel", "a real run says it runs on this Mac")
+        case .scheduled:
+            expect(activity.footer == NotchActivity.countdownFooter, "notch.honestLabel", "the countdown says a click cancels it")
+            expect(!app.env.runner.isRunning, "trigger.countdownBeforeRun", "no run happens during a countdown")
+        case .receipt where activity.footer == NotchActivity.runReceiptFooter:
+            break   // the receipt of a real run
         default:
             expect(activity.footer.contains("Simulated") || activity.footer.contains("Concept demonstration"),
                    "notch.honestLabel", "every simulated notch state must say Simulated or Concept demonstration")
+        }
+        let runner = app.env.runner
+        expect(!(runner.isRunning && app.env.watch.isWatching), "run.notDuringWatch", "a run and Watch never overlap")
+        for (index, step) in runner.steps.enumerated() where step.effect.needsApproval && runner.results[index].status == .done {
+            expect(approved.contains(step.id), "run.approvalRequired", "a step that sends or deletes never runs without approval")
         }
         let watch = app.env.watch
         expect(watch.problem == nil || !watch.isWatching, "watch.problemMeansNotWatching", "Watch shows a problem only when it isn't recording")
@@ -543,7 +689,7 @@ final class SelfTest {
     /// The notch reacts to a state change on the next pass of the run loop, so a mismatch gets up
     /// to 100 ms to settle (well under what a person notices) before it counts as a failure.
     private func checkNotchOpenness() async {
-        let active: [NotchActivity.Mode] = [.watching, .learned, .rehearsing, .receipt, .demo]
+        let active: [NotchActivity.Mode] = [.watching, .learned, .rehearsing, .scheduled, .running, .receipt, .demo]
         func mismatch(_ mode: NotchActivity.Mode) -> Bool {
             (mode == .idle && app.notch.isExpanded) || (active.contains(mode) && !app.notch.isExpanded)
         }
@@ -560,6 +706,13 @@ final class SelfTest {
         if app.env.ui.page == .teach { visit("teach.step\(app.env.ui.teachingStep + 1)") }
         visit("notch.\(app.env.activity.mode)")
         if app.env.watch.problem != nil { visit("watch.blocked") }
+        let runner = app.env.runner
+        if runner.isRunning { visit(runner.pause == nil ? "run.running" : "run.waiting") }
+        if app.env.activity.mode == .scheduled { visit("trigger.countdown") }
+        if !app.env.scheduler.scheduled.isEmpty { visit("trigger.set") }
+        if app.env.ui.page == .results, (app.env.library.receipts.first { $0.id == app.env.ui.selectedReceipt } ?? app.env.library.receipts.first)?.isRun == true {
+            visit("run.receipt")
+        }
         visit(mainWindow?.isVisible == true ? "window.main.open" : "window.main.closed")
         visit("account.\(app.env.model.phase == .notConfigured ? "notConfigured" : "other")")
     }

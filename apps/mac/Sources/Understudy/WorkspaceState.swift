@@ -75,6 +75,35 @@ final class WorkspaceState: ObservableObject {
         draftSteps[index].intent = "Type \(RecordedAction.quote(text))"
     }
 
+    // MARK: When a skill runs
+
+    /// The trigger being edited on the Skills page, and whose it is.
+    @Published var triggerDraft = SkillDefinition.Trigger.manual
+    private(set) var triggerSkill: UUID?
+
+    /// Starts editing `skill`'s trigger, unless it's already being edited.
+    func editTrigger(of skill: Skill) {
+        guard triggerSkill != skill.id else { return }
+        triggerDraft = skill.definition.trigger
+        triggerSkill = skill.id
+    }
+
+    func toggleWeekday(_ day: Int) {
+        var days = Set(triggerDraft.weekdays ?? [])
+        if days.contains(day) { days.remove(day) } else { days.insert(day) }
+        triggerDraft.weekdays = days.sorted()
+    }
+
+    /// The draft as it will be saved: set on this Mac, with its summary, and times filled in.
+    func finishedTrigger(device: String) -> SkillDefinition.Trigger {
+        var trigger = triggerDraft
+        if trigger.kind == .schedule { trigger.hour = trigger.hour ?? 9; trigger.minute = trigger.minute ?? 0 }
+        if trigger.kind == .interval { trigger.everyHours = trigger.everyHours ?? 1 }
+        trigger.device = trigger.kind == .manual ? nil : device
+        trigger.detail = trigger.summary
+        return trigger
+    }
+
     func clearDraft() {
         draftSteps = []
         draftRecording = nil
