@@ -21,7 +21,7 @@ Tracker updates, client email, other connectors and MCP, client-wide and global 
 
 - **Teaching and evaluation stay separate.** Only `data/fixtures/teaching/` is available during development. `data/evaluation/holdout/` (weeks 4–7: both the input sheets and the expected reports) is read only by the test harness. See its README.
 - **Read-only means every connected account.** During rehearsal, Understudy must not modify any live sheet, document, draft, file, or other account data. It may write only to an isolated local output folder (`runs/`). Where possible this is enforced with read-only credentials, not just avoided.
-- **Numbers are exact under `docs/report-spec.md`.** Source figures must equal the sheet. Calculated figures must follow the spec's formulas and decimal half-up rounding.
+- **Numbers are exact under `docs/product/report-spec.md`.** Source figures must equal the sheet. Calculated figures must follow the spec's formulas and decimal half-up rounding.
 
 ## Proposed pass/fail criteria
 
@@ -39,7 +39,7 @@ Three held-out weeks passing is an initial result, not evidence of broad reliabi
 ## Milestones
 
 1. **M0 · Fixtures** (done): synthetic teaching and held-out data, report spec, template.
-2. **M1 · Capture experiment** (in progress): see `docs/capture-experiment.md`. Report the result before expanding the build.
+2. **M1 · Capture experiment** (in progress): see `docs/research/capture-experiment.md`. Report the result before expanding the build.
 3. **M2 · Learn:** event log → skill file (T1).
 4. **M3 · Run and receipt:** on the teaching sheet (T5).
 5. **M4 · Rehearsal and missing figure:** on the held-out weeks (T2–T4).

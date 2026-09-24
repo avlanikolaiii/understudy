@@ -86,7 +86,7 @@ read-only rehearsal → run and receipt → Google Sheets read-only connector �
 server-side AI proxy. The simulation is a temporary UI milestone, not evidence
 that demonstration-based learning works.
 
-The Watch slice was built in this session. See `watch-slice.md` for behavior and
+The Watch slice was built in this session. See `docs/app/watch-slice.md` for behavior and
 verification limits. Existing standalone workspace code is a separate local
 demo with fixed sample outputs. Its sample skills are not learned procedures,
 and its notes are not enforced rules. Account-dependent flows still require
