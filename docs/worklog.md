@@ -113,3 +113,7 @@ Entries are append-only, newest last. Use this format:
 - what: `app/scripts/make-icon.swift` draws the favicon (dark rounded square #101217, yellow dot #F4C534, same proportions) on Apple's 824/1024 icon grid. `iconutil` builds the .icns. `bundle.sh` copies it and sets `CFBundleIconFile`.
 - verified: the bundle builds and its signature verifies. `NSWorkspace.icon(forFile:)` returns the new icon, with macOS 26's glass treatment applied.
 - not verified: how the Dock and Finder look on screen (my screenshots of other apps are unreliable). The menu bar item still uses the theater-masks symbol.
+
+## 2026-09-23 21:05 · Claude Code · Icon now glows like the website header logo
+- what: the app icon and the favicon now draw the header's `.bulb`: dot, 30% ring, and 55% glow in dark-mode yellow #E0B22A on #101217. Both were redeployed and rebuilt.
+- verified: macOS returns the new icon for the bundle, and the live site serves the new favicon.
