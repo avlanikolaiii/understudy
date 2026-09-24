@@ -109,6 +109,14 @@ struct WatchChecks {
         precondition(finished == 1 && WatchSession.load(session.recordingFolder)?.video == "screen.mov")
         session.stop { finished += 1 }
         precondition(finished == 2)
+        // Quitting after Stop, while the video is still being written, waits for it too.
+        session.start(automaticTicks: false)
+        session.stop()
+        precondition(session.savingVideos == 1)
+        session.stop { finished += 1 }
+        precondition(finished == 2)
+        capture.finishVideos()
+        precondition(finished == 3 && session.savingVideos == 0)
         session.dismiss()
         capture.video = nil
 

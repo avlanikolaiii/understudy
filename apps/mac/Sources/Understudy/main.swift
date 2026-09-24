@@ -94,12 +94,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApplication.shared.mainMenu = menu
     }
 
-    /// Quitting while Watch records stops it and waits (up to 5 s) for the take to be saved.
+    /// Quitting while Watch records, or while a stopped take's video is still being written,
+    /// waits (up to 5 s) for the take to be saved.
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
-        guard env.watch.isWatching else { return .terminateNow }
+        guard env.watch.isWatching || env.watch.savingVideos > 0 else { return .terminateNow }
         var replied = false
         let reply = { if !replied { replied = true; sender.reply(toApplicationShouldTerminate: true) } }
-        env.watch.stop(finished: reply)
+        if env.watch.isWatching { env.watch.stop() }
+        env.watch.whenSaved(reply)
         DispatchQueue.main.asyncAfter(deadline: .now() + 5, execute: reply)
         return .terminateLater
     }

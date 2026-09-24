@@ -109,14 +109,25 @@ final class ActionMonitor {
         }
         guard let characters = event.characters, !characters.isEmpty,
               characters.unicodeScalars.allSatisfy({ !CharacterSet.controlCharacters.contains($0) }) else { return }
-        if typing?.pid != pid {
+        // A new field (even in the same app, e.g. a form that moves to the next field by itself)
+        // starts a new typing action, so each text is tied to the field it went into.
+        let field = AX.focusedElement(pid: pid)
+        let sameField = typing.map { $0.pid == pid && Self.same($0.field, field) } ?? false
+        if !sameField {
             flushTyping()
-            let field = AX.focusedElement(pid: pid)
             typing = Typing(pid: pid, app: app, field: field, element: field.map(AX.describe),
                             window: AX.focusedWindowTitle(pid: pid), t: clock())
         }
         typing?.text += characters
         scheduleFlush()
+    }
+
+    private static func same(_ a: AXUIElement?, _ b: AXUIElement?) -> Bool {
+        switch (a, b) {
+        case (nil, nil): true
+        case let (a?, b?): CFEqual(a, b)
+        default: false
+        }
     }
 
     // MARK: Recording

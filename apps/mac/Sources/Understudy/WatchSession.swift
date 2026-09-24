@@ -90,14 +90,18 @@ final class WatchSession: ObservableObject {
     /// Stops recording. `finished` runs once the video is written (or there is none), e.g. so the
     /// app can quit without losing the take.
     func stop(finished: @escaping () -> Void = {}) {
-        guard isWatching else { return finished() }
+        guard isWatching else { return whenSaved(finished) }
         advance()
         addRule()
         timer?.cancel(); timer = nil
         let take = id, folder = recordingFolder, duration = now() - startedAt
         // Still watching while the source stops, so its last actions (pending typing) are kept.
+        savingVideos += 1
         source.stop { [weak self] result in
-            defer { finished() }
+            defer {
+                finished()
+                self?.videoSaved()
+            }
             let video: String
             switch result {
             case .none: return
@@ -119,6 +123,23 @@ final class WatchSession: ObservableObject {
         if recording?.id != take {
             save(Recording(id: take, startedAt: startedDate, duration: duration, actions: actions, notes: rules, video: nil))
         }
+    }
+
+    /// Videos still being written after Stop. Quitting waits for them (see `whenSaved`).
+    private(set) var savingVideos = 0
+    private var savedWaiters: [() -> Void] = []
+
+    /// Runs `done` once every stopped take's video is written, at once if none is pending.
+    func whenSaved(_ done: @escaping () -> Void) {
+        if savingVideos == 0 { done() } else { savedWaiters.append(done) }
+    }
+
+    private func videoSaved() {
+        savingVideos = max(0, savingVideos - 1)
+        guard savingVideos == 0 else { return }
+        let waiters = savedWaiters
+        savedWaiters = []
+        waiters.forEach { $0() }
     }
 
     func addRule() {
