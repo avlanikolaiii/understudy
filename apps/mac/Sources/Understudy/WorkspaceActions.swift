@@ -1,4 +1,5 @@
 import Foundation
+import UnderstudyCore
 
 /// Button actions that touch the library and the notch. They live here, not in the view,
 /// so the main window and the self-test run exactly the same code.
@@ -14,12 +15,53 @@ extension WorkspaceState {
         library.skills.first(where: { $0.id == selectedSkill?.id }) ?? library.skills.first ?? .sample
     }
 
-    /// "Save sample skill" on the Review step.
+    /// "Save skill" on the Review step: the reviewed steps, the notes, and the recording they came from.
     func saveReviewedSkill(library: SkillLibrary, watch: WatchSession, activity: NotchActivity) {
+        let definition = draftSteps.isEmpty ? SkillDefinition.prepared(notes: rules)
+            : SkillDefinition(steps: draftSteps, rules: SkillDefinition.Rule.lines(rules), recording: draftRecording)
         let skill = Skill(name: skillName.trimmingCharacters(in: .whitespacesAndNewlines),
-                          client: clientName.trimmingCharacters(in: .whitespacesAndNewlines), rules: rules)
+                          client: clientName.trimmingCharacters(in: .whitespacesAndNewlines), definition: definition)
         library.save(skill) { [weak self] saved in self?.selectedSkill = saved; activity.showLearned(saved) }
-        watch.dismiss(); teachingStep = 0; page = .skills
+        watch.dismiss(); clearDraft(); teachingStep = 0; page = .skills
+    }
+
+    /// "Save" in Edit skill.
+    func saveEdit(of skill: Skill, library: SkillLibrary) {
+        guard canSaveEdit, editing == skill.id else { return }
+        library.update(edited(skill)) { [weak self] saved in self?.selectedSkill = saved }
+        cancelEdit()
+    }
+
+    /// "Delete" on the Skills page, after the person confirms. Not while it runs.
+    func deleteSkill(_ skill: Skill, library: SkillLibrary, runner: RunController) {
+        guard !(runner.isRunning && runner.skill?.id == skill.id) else { return }
+        library.delete(skill)
+        if selectedSkill?.id == skill.id { selectedSkill = nil }
+        if editing == skill.id { cancelEdit() }
+    }
+
+    /// "Save" under When it runs.
+    func saveTrigger(_ trigger: SkillDefinition.Trigger, of skill: Skill, library: SkillLibrary) {
+        var updated = skill
+        updated.definition.trigger = trigger
+        library.update(updated) { [weak self] saved in
+            self?.selectedSkill = saved
+            self?.triggerDraft = saved.definition.trigger
+        }
+    }
+
+    /// "Create steps from latest recording" on the Skills page, for a skill saved without steps.
+    /// Also "Use latest recording" for a skill that has steps: a new take replaces its steps,
+    /// keeping its notes and when it runs.
+    func addStepsFromLatestRecording(to skill: Skill, library: SkillLibrary, watch: WatchSession) {
+        // A newer take replaces the steps; a skill left with no steps can always get them back.
+        guard !skill.isSample, let recording = watch.latestRecording(),
+              recording.id != skill.definition.recording || skill.definition.steps.isEmpty else { return }
+        var updated = skill
+        updated.definition.steps = StepsFromRecording.steps(from: recording)
+        updated.definition.recording = recording.id
+        updated.definition.simulated = false
+        library.update(updated) { [weak self] saved in self?.selectedSkill = saved }
     }
 
     /// "Rehearse sample" on the Skills page.

@@ -37,6 +37,19 @@ struct AccountStore {
         return row.skill
     }
 
+    /// Replaces a saved skill's name, client, and definition (its steps, notes, trigger, recording link).
+    func update(_ skill: Skill) async throws -> Skill {
+        let row: SkillRow = try await client.from("skills")
+            .update(SkillChangeRow(name: skill.name, client: skill.client, definition: skill.definition))
+            .eq("id", value: skill.id).select(SkillRow.columns).single().execute().value
+        return row.skill
+    }
+
+    /// Deletes a skill. Its receipts stay, with the skill's name (see migration 0002).
+    func delete(_ skill: Skill) async throws {
+        try await client.from("skills").delete().eq("id", value: skill.id).execute()
+    }
+
     func save(_ receipt: Receipt, skill: Skill) async throws {
         try await client.from("receipts").insert(NewReceiptRow(receipt, skill: skill)).execute()
     }
@@ -68,37 +81,48 @@ private struct NewSkillRow: Encodable {
     }
 }
 
+private struct SkillChangeRow: Encodable {
+    let name: String
+    let client: String
+    let definition: SkillDefinition
+}
+
 private struct ProfileRow: Decodable {
     let plan: String
 }
 
 private struct ReceiptRow: Decodable {
-    static let columns = "id,created_at,ready_to_send,skill_name,client,report"
+    static let columns = "id,created_at,kind,ready_to_send,steps,skill_name,client,report"
     let id: UUID
     let created_at: Date
+    let kind: String
     let ready_to_send: Bool
+    let steps: [ReceiptStep]?
     let skill_name: String?
     let client: String?
     let report: String?
 
     var receipt: Receipt {
-        Receipt(id: id, date: created_at, skillName: skill_name ?? "Skill", client: client ?? "",
-                missingSpend: !ready_to_send, report: report ?? "", rules: "")
+        let run = kind == "run"
+        return Receipt(id: id, date: created_at, skillName: skill_name ?? "Skill", client: client ?? "",
+                       missingSpend: !run && !ready_to_send, report: report ?? "", rules: "",
+                       ranSteps: run ? steps ?? [] : nil, outcome: run ? (ready_to_send ? "Completed" : "Blocked · needs you") : nil)
     }
 }
 
 private struct NewReceiptRow: Encodable {
     let id: UUID
     let skill_id: UUID
-    let kind = "rehearsal"
+    let kind: String
     let ready_to_send: Bool
     let steps: [ReceiptStep]
     let skill_name: String
     let client: String
     let report: String
-    let simulated = true
+    let simulated: Bool
     init(_ receipt: Receipt, skill: Skill) {
         id = receipt.id; skill_id = skill.id; ready_to_send = receipt.readyToSend; steps = receipt.steps
+        kind = receipt.isRun ? "run" : "rehearsal"; simulated = !receipt.isRun
         skill_name = receipt.skillName; client = receipt.client; report = receipt.report
     }
 }

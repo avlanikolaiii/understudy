@@ -19,6 +19,7 @@ final class ActionMonitor {
     private var lastCells: [pid_t: String] = [:]
     /// Apps whose spreadsheet selection is read shortly after a click or key; read at once on stop.
     private var pendingSelections: Set<pid_t> = []
+    private var lastWarm = Date.distantPast
 
     /// Text typed into one field. The field is fixed when typing starts, so a later change of
     /// focus can't move the text to another field, or out of a password field.
@@ -40,8 +41,15 @@ final class ActionMonitor {
         self.clock = clock
         self.emit = emit
         // Global monitors call back on the main thread.
-        if let monitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown], handler: { _ in
-            MainActor.assumeIsolated { self.clicked(at: NSEvent.mouseLocation) }
+        if let monitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown], handler: { event in
+            MainActor.assumeIsolated { self.clicked(at: NSEvent.mouseLocation, count: event.clickCount) }
+        }) { monitors.append(monitor) }
+        // Apps built on Electron show their contents to Accessibility once asked.
+        NSWorkspace.shared.runningApplications.filter { $0.activationPolicy == .regular }.forEach(AX.reveal)
+        // Asking what's under the pointer as it moves lets apps built on Chromium have the exact
+        // element ready when the click comes (their first answer at a point is their whole page).
+        if let monitor = NSEvent.addGlobalMonitorForEvents(matching: .mouseMoved, handler: { _ in
+            MainActor.assumeIsolated { self.warm(at: NSEvent.mouseLocation) }
         }) { monitors.append(monitor) }
         if let monitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown, handler: { event in
             MainActor.assumeIsolated { self.keyDown(event) }
@@ -70,20 +78,47 @@ final class ActionMonitor {
 
     private func activated(_ app: NSRunningApplication) {
         guard app.processIdentifier != getpid(), app.activationPolicy == .regular else { return }
+        AX.reveal(app)
         flushTyping()
         emit(RecordedAction(t: clock(), kind: .appSwitch, app: app.localizedName ?? "App", bundle: app.bundleIdentifier,
                             window: AX.focusedWindowTitle(pid: app.processIdentifier)))
     }
 
-    private func clicked(at location: NSPoint) {
+    private func warm(at location: NSPoint) {
+        guard Date().timeIntervalSince(lastWarm) > 0.1 else { return }
+        lastWarm = Date()
+        _ = AX.element(at: Self.accessibilityPoint(location))
+    }
+
+    /// Accessibility measures from the top-left of the main screen; AppKit from the bottom-left.
+    private static func accessibilityPoint(_ location: NSPoint) -> CGPoint {
+        CGPoint(x: location.x, y: (NSScreen.screens.first?.frame.maxY ?? 0) - location.y)
+    }
+
+    private func clicked(at location: NSPoint, count: Int) {
         flushTyping()
-        // Accessibility measures from the top-left of the main screen; AppKit from the bottom-left.
-        let top = NSScreen.screens.first?.frame.maxY ?? 0
-        guard let hit = AX.element(at: CGPoint(x: location.x, y: top - location.y)) else { return }
+        let point = Self.accessibilityPoint(location)
+        guard let hit = AX.element(at: point) else { return }
+        let t = clock(), current = take
+        // A large container means the app hadn't looked yet: ask again a moment later, and use
+        // the exact element. The position only finds what was clicked; it isn't recorded.
+        guard AX.isCoarse(hit) else { return record(click: hit, t: t, count: count) }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [self] in
+            guard take == current else { return }
+            let again = AX.element(at: point).flatMap { AX.pid(of: $0) == AX.pid(of: hit) ? $0 : nil } ?? hit
+            record(click: again, t: t, count: count)
+        }
+    }
+
+    private func record(click hit: AXUIElement, t: Double, count: Int) {
         let pid = AX.pid(of: hit)
         guard pid != getpid(), let app = NSRunningApplication(processIdentifier: pid) else { return }
-        emit(RecordedAction(t: clock(), kind: .click, app: app.localizedName ?? "App", bundle: app.bundleIdentifier,
-                            window: AX.focusedWindowTitle(pid: pid), element: AX.describe(AX.control(from: hit))))
+        // What was clicked, and what finds it again (never where it was on screen).
+        let element = AX.describeClicked(AX.control(from: hit))
+        let hidden = element.name == nil && AX.engine(of: app) == .chromiumEmbedded && AX.hidesContents(app)
+        emit(RecordedAction(t: t, kind: .click, app: app.localizedName ?? "App", bundle: app.bundleIdentifier,
+                            window: AX.focusedWindowTitle(pid: pid), element: element,
+                            clicks: count > 1 ? count : nil, hiddenIn: hidden ? app.bundleIdentifier : nil))
         readSelection(pid: pid, after: 0.35)
     }
 
@@ -92,18 +127,23 @@ final class ActionMonitor {
         let pid = app.processIdentifier
         let modifiers = event.modifierFlags.intersection([.command, .control, .option, .shift])
         let named = Self.keyNames[Int(event.keyCode)]
-        if modifiers.contains(.command) || modifiers.contains(.control) || named != nil {
+        // Keys go to a text field only if one has focus. Anywhere else (an inbox, a list) a letter
+        // is a shortcut, like E to archive: it's recorded as a key press, never as typed text.
+        let inTextField = typing?.pid == pid || AX.focusedElement(pid: pid).map(AX.describe)?.isTextInput == true
+        if modifiers.contains(.command) || modifiers.contains(.control) || named != nil || !inTextField {
             // A plain backspace while typing corrects the text being typed. Any other deletion
             // (⌥⌫ for a word, or backspacing into text that was already there) is kept as a key.
             if Int(event.keyCode) == kVK_Delete && modifiers.isEmpty && typing?.text.isEmpty == false {
                 typing?.text.removeLast()
                 return scheduleFlush()
             }
-            // A key like Return, Tab, or an arrow, or a shortcut: it's replayed as pressed.
+            // A key like Return, Tab, or an arrow, a shortcut, or a key outside a text field:
+            // it's replayed as pressed.
             flushTyping()
             let key = named ?? event.charactersIgnoringModifiers?.uppercased() ?? ""
             emit(RecordedAction(t: clock(), kind: .shortcut, app: app.localizedName ?? "App", bundle: app.bundleIdentifier,
-                                window: AX.focusedWindowTitle(pid: pid), text: Self.symbols(modifiers) + key))
+                                window: AX.focusedWindowTitle(pid: pid), text: Self.symbols(modifiers) + key,
+                                keyCode: Int(event.keyCode)))
             readSelection(pid: pid, after: 0.2)
             return
         }

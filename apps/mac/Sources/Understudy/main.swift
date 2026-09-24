@@ -13,8 +13,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         shortcutSettings = ShortcutSettingsController(manager: env.shortcuts)
         workspace = WorkspaceController(auth: env.model, library: env.library, ui: env.ui, watch: env.watch, activity: env.activity,
-                                        openSettings: { [weak self] in self?.shortcutSettings.show() })
-        notch = NotchController(activity: env.activity, onTap: { [weak self] page in self?.workspace.show(page) })
+                                        runner: env.runner, scheduler: env.scheduler, openSettings: { [weak self] in self?.shortcutSettings.show() })
+        notch = NotchController(activity: env.activity, onTap: { [weak self] page in
+            guard let self else { return }
+            // During the countdown before a triggered run, a click cancels that run.
+            if self.env.activity.mode == .scheduled { return self.env.scheduler.cancelPending() }
+            self.workspace.show(page)
+        })
         installMainMenu()
 
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
@@ -48,6 +53,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         env.shortcuts.start { [weak self] in self?.shortcutPressed() }
         env.model.start()
+        env.scheduler.start()
         if CommandLine.arguments.contains("--notch-demo") {
             // Plays the landing page's hero sequence in the real notch, for side-by-side comparison.
             env.activity.playDemo()
@@ -137,6 +143,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             env.activity.dismiss()
         case .rehearsing:
             workspace.show(.results)
+        case .running:
+            workspace.show(.skills)
+        case .scheduled:
+            env.scheduler.cancelPending()
         case .idle, .demo:
             env.ui.startWatch(env.watch)
             // If Watch can't start (e.g. no Accessibility access), show why.

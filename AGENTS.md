@@ -10,7 +10,7 @@ Understudy is a macOS companion that lives in the MacBook notch, with a menu bar
 - **Runtime:** Understudy runs steps itself through connectors and calls AI models (Claude Opus 5.5, GPT-5.6 Sol) only for steps that need judgment. It is not a plug-in or skill exporter for ChatGPT or Claude.
 - **First workflow:** the weekly client update (sheet figures → report from a template → tracker row → email draft awaiting approval).
 - **Initial customer hypothesis:** agencies and consultancies. This is a hypothesis, not validated demand.
-- **Status:** in development. Watch records real demonstrations (screen video and an action log, kept on the Mac). Learning and rehearsal are still simulated. The report engine is real but not wired into the app yet.
+- **Status:** in development. Watch records real demonstrations (screen video and an action log, kept on the Mac). Recorded steps run for real, by hand or on a trigger, without AI. AI learning and the sample report's rehearsal are still to come or simulated. The report engine is real but not wired into the app yet.
 
 ## Repository layout
 
@@ -35,6 +35,7 @@ Understudy is a macOS companion that lives in the MacBook notch, with a menu bar
 - **Auth** (`AppModel`): Supabase Auth with Google, Apple, and email link, using PKCE and the redirect `understudy://auth-callback`.
 - **Report engine** (`UnderstudyCore/ReportEngine.swift`): pure Foundation, using `Decimal`, and following `docs/product/report-spec.md`.
 - **Watch** (`WatchSession.swift`, `Capture/`): records a demonstration through a replaceable `CaptureSource`: `ScreenCapture` (ScreenCaptureKit video through macOS's picker, plus an Accessibility action log) on a Mac, `ScriptedCapture` in tests. Recordings are folders in `~/Library/Application Support/Understudy/recordings/`. See `docs/app/watch.md`.
+- **Run** (`Run/`, `UnderstudyCore/RunEngine.swift`, `StepsFromRecording.swift`, `Trigger.swift`): a recording becomes steps; `RunController` runs them through `AppPerformer` (open apps, press controls by name, type, keys; never the mouse), pausing for approval on sending or deleting, and saves a receipt. `Scheduler` starts skills on a schedule, an interval, an app opening, or a file arriving, after a 10-second countdown in the notch. See `docs/app/run.md`.
 - **Shortcut** (`KeyboardShortcut.swift`): a Carbon hot key (default ⌥ Space), remappable, that needs no Accessibility permission. It starts Watch; pressing it again stops Watch and opens the review.
 
 ## Build and test
@@ -73,6 +74,8 @@ Continuous integration builds the app once (macos-15, Swift 6.1), runs the check
 - **Honest labels.** Simulated behavior is labeled "Simulated" or "Concept demonstration" in the UI, the docs, and the website. A capability is described as working only when it can be demonstrated in the real app.
 - **Held-out data.** App code, learning code, and agents during development never open, read, list, or grep `data/evaluation/`. Use `data/fixtures/teaching/`.
 - **Read-only rehearsal.** Rehearsal never writes to any connected account. It writes only to local output.
+- **Clicks are found by what was clicked, never by where.** A click is recorded as the element (role, name or its text, identifier) and the text around it that tells it apart; a run finds it again that way, so moving or resizing a window never changes what it presses. A click with nothing to identify it is shown as a step that can't run.
+- **Keys are replayed as they were pressed.** A key pressed where no text field had focus (an inbox, a list, a page) is a key press, recorded and replayed with its key code: letters there are app shortcuts (E to archive), never typed text. A run never clicks into or types into a text field unless the recording did.
 - **Report math.** Numbers follow `docs/product/report-spec.md` exactly: `Decimal`, half-up rounding at display time, and missing data is never estimated. If a fixture disagrees with the spec, stop and report it; the spec wins.
 - **Secrets.** Secrets (the Supabase secret key, Google client secret, Apple `.p8` key, Anthropic key, Vercel tokens) never enter the repository, the app bundle, or the website. `apps/mac/config.local.json` and `.env*` files are git-ignored. The Supabase publishable key is public by design.
 - **Permissions and outreach.** Ask the human before sending outreach, creating files in the human's Google Drive, requesting new macOS permissions, or publishing public content.
