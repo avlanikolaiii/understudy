@@ -371,6 +371,10 @@ final class SelfTest {
                 let shown = library.receipts.first { $0.id == ui.selectedReceipt } ?? library.receipts.first
                 if shown?.isRun == true {
                     onScreen.append(("backToSkills", { ui.page = .skills }))
+                    if let receipt = shown, let index = receipt.resumeIndex, !app.env.runner.isRunning,
+                       let skill = library.skills.first(where: { $0.id == receipt.skillID }), index < skill.definition.steps.count {
+                        onScreen.append(("resumeRun", { await self.resume(skill, from: index) }))
+                    }
                 } else if shown != nil {
                     onScreen.append(("export", { self.export() }))
                     onScreen.append(("tryAnotherCase", { ui.page = .skills }))
@@ -587,6 +591,18 @@ final class SelfTest {
         expect(started && runner.skill?.id == skill.id, "run.starts", "Run starts a skill that has steps")
         await pump(30)
         checkRunEnded(before: before)
+    }
+
+    /// "Run again from step N": the steps before N are never performed again.
+    private func resume(_ skill: Skill, from index: Int) async {
+        let earlier = Set(skill.definition.steps.prefix(index).map(\.id))
+        let before = performer.performed.count
+        guard app.env.runner.start(skill, mode: .run, from: index) else { return }
+        await pump(30)
+        expect(!performer.performed.dropFirst(before).contains(where: earlier.contains), "run.resumeSkipsDone",
+               "resuming never repeats the steps before it")
+        expect(app.env.runner.results.prefix(index).allSatisfy { $0.status == .skipped }, "run.resumeMarksDone",
+               "the steps before a resume are marked as not repeated")
     }
 
     private func approveStep() async {

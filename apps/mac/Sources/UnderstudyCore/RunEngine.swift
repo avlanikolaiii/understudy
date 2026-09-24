@@ -56,17 +56,34 @@ public final class RunEngine {
     private var turn = 0
 
     /// `wait(seconds, then)` waits before a step (the pause from the recording).
-    public init(steps: [SkillDefinition.Step], mode: Mode, performer: StepPerformer,
+    /// Where the run starts: 0, or the step to resume from after an earlier run stopped there.
+    public let startIndex: Int
+
+    public init(steps: [SkillDefinition.Step], mode: Mode, performer: StepPerformer, startingAt startIndex: Int = 0,
                 wait: @escaping (Double, @escaping () -> Void) -> Void, onEvent: @escaping (Event) -> Void) {
         self.steps = steps; self.mode = mode; self.performer = performer; self.wait = wait; self.onEvent = onEvent
-        results = steps.map { _ in StepOutcome(.notRun, .none, "Not run.") }
+        self.startIndex = min(max(0, startIndex), steps.count)
+        results = steps.indices.map { index in
+            index < startIndex ? StepOutcome(.skipped, .none, "Not repeated: done in the run this one resumes.")
+                               : StepOutcome(.notRun, .none, "Not run.")
+        }
+    }
+
+    /// The pause before a step. Steps that act on an element wait for it to appear instead (the
+    /// performer waits up to the step's timeout), so they don't need the recording's pause. Keys and
+    /// typing keep a short pause, at most 2 s, for the app to settle (e.g. a palette opening).
+    public static func pause(before step: SkillDefinition.Step) -> Double {
+        switch step.parameters["action"] {
+        case "press", "focus", "activate", "waitText", "waitSeconds": return 0
+        default: return min(2, Double(step.parameters["after"] ?? "") ?? 0)
+        }
     }
 
     public var isFinished: Bool { outcome != nil }
 
     public func start() {
         guard current == nil, outcome == nil else { return }
-        next(0)
+        next(startIndex)
     }
 
     /// Runs the paused step.
@@ -113,8 +130,7 @@ public final class RunEngine {
     private func perform(_ index: Int) {
         let step = steps[index], mine = turn
         onEvent(.started(index))
-        let after = Double(step.parameters["after"] ?? "") ?? 0
-        wait(mode == .stepByStep ? 0 : after) { [weak self] in
+        wait(mode == .stepByStep ? 0 : Self.pause(before: step)) { [weak self] in
             guard let self, self.turn == mine, self.outcome == nil else { return }
             self.performer.perform(step) { [weak self] result in
                 guard let self, self.turn == mine, self.outcome == nil else { return }

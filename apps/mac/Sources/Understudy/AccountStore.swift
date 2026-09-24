@@ -92,8 +92,9 @@ private struct ProfileRow: Decodable {
 }
 
 private struct ReceiptRow: Decodable {
-    static let columns = "id,created_at,kind,ready_to_send,steps,skill_name,client,report"
+    static let columns = "id,created_at,kind,ready_to_send,steps,skill_id,skill_name,client,report"
     let id: UUID
+    let skill_id: UUID?
     let created_at: Date
     let kind: String
     let ready_to_send: Bool
@@ -106,7 +107,8 @@ private struct ReceiptRow: Decodable {
         let run = kind == "run"
         return Receipt(id: id, date: created_at, skillName: skill_name ?? "Skill", client: client ?? "",
                        missingSpend: !run && !ready_to_send, report: report ?? "", rules: "",
-                       ranSteps: run ? steps ?? [] : nil, outcome: run ? (ready_to_send ? "Completed" : "Blocked · needs you") : nil)
+                       ranSteps: run ? steps ?? [] : nil, outcome: run ? (ready_to_send ? "Completed" : "Blocked · needs you") : nil,
+                       skillID: skill_id)
     }
 }
 

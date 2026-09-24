@@ -23,6 +23,16 @@ The pause before each step is the one in the recording, between 0.3 and 5 second
 
 The review lists the steps; each can be deleted, moved up, or retyped. They are saved with the skill (`skills.definition`) along with the recording's id. A skill saved before steps existed can get them from the latest recording on the Skills page.
 
+## Reliability
+
+- **No fixed pauses for elements.** A step that presses or clicks into something runs as soon as it appears, waiting up to its timeout (10 s by default). Keys and typing keep a short pause (at most 2 s) for the app to settle.
+- **Results are read back.** After a press, a run looks for what should change: a toggle's other state ("Pause" after "Play"), or a heading or window title with the pressed item's name ("Bloom opened"). Then the receipt says *Verified* instead of *Not verifiable*. ↩ in a field is verified when the field's text changes.
+- **A control that changed a little is still found.** If nothing matches exactly, a run looks for one control of the same kind, in the same place (context), whose name is the recorded one plus more words ("Bloom" → "Bloom (Deluxe)", never "Play" → "Playlist"). The receipt says so. If more than one could be it, the step is blocked: it never guesses.
+- **Run again from the step that stopped.** A stopped or blocked run's receipt offers **Run again from step N** once you've fixed the cause; the steps before it aren't repeated.
+- **Wait until…** steps (text shows in an app, or a number of seconds) can be added by hand.
+
+Measured live on Spotify: the "Bloom" album heading is recognized as the result of pressing Bloom; "Bloom Album • Caligula's Horse" is found exactly; the short name "Bloom" finds two possible matches, so it isn't guessed.
+
 ## Running
 
 Skills → **Run now** or **Test step by step** (every step waits for "Run this step").

@@ -7,8 +7,6 @@ import UnderstudyCore
 /// says how it was checked. It needs Accessibility access (the same as Watch).
 @MainActor
 final class AppPerformer: StepPerformer {
-    /// How long a step waits for its app or control to appear.
-    static let timeout = 5.0
     private var cancelled = false
 
     static let accessibilityNeeded = "Understudy needs Accessibility access to run skills. "
@@ -20,6 +18,7 @@ final class AppPerformer: StepPerformer {
         switch step.parameters["action"] {
         case "activate": activate(step, done)
         case "press", "focus": act(on: step, done)
+        case "waitText", "waitSeconds": wait(step, done)
         case "type": type(step, done)
         case "keys": keys(step, done)
         default: done(StepOutcome(.blocked, .none, step.parameters["reason"] ?? "This step can't run yet."))
@@ -69,34 +68,82 @@ final class AppPerformer: StepPerformer {
                 ?? frontApp(for: step) else {
             return done(StepOutcome(.failed, .none, "\(step.parameters["app"] ?? "The app") isn't open."))
         }
-        var found: AXUIElement?
-        poll({ found = AX.find(in: app.processIdentifier, role: step.target.role, name: step.target.title,
-                               identifier: step.target.identifier, context: step.parameters["context"]); return found != nil }) { _ in
-            guard let element = found else {
+        let pid = app.processIdentifier, context = step.parameters["context"]
+        // Waits for the control to appear (up to the step's timeout) instead of a fixed pause.
+        var located = AX.Located.missing
+        poll({
+            located = AX.locate(in: pid, role: step.target.role, name: step.target.title, identifier: step.target.identifier, context: context)
+            if case .exact = located { return true }
+            return false
+        }, timeout: Self.timeout(step)) { [self] _ in
+            let element: AXUIElement, note: String
+            switch located {
+            case .exact(let found): element = found; note = ""
+            case .similar(let found, let name): element = found; note = " Found by a similar name: \(RecordedAction.quote(name))."
+            case .ambiguous(let count):
+                return done(StepOutcome(.blocked, .none, "\(count) controls look like \(RecordedAction.quote(label)); Understudy doesn't guess which."))
+            case .missing:
                 // A toggle showing its other state ("Pause" where "Play" was recorded) means the
                 // step's result is already there: nothing to press.
                 if let name = step.target.title, let other = Self.toggles[name],
-                   AX.find(in: app.processIdentifier, role: step.target.role, name: other, identifier: nil, context: step.parameters["context"]) != nil {
+                   AX.find(in: pid, role: step.target.role, name: other, identifier: nil, context: context) != nil {
                     return done(StepOutcome(.done, .verified, "\(RecordedAction.quote(other)) is showing, so it's already done; nothing was pressed."))
                 }
-                return done(StepOutcome(.failed, .none, "Couldn't find \(RecordedAction.quote(label)) in \(app.localizedName ?? "the app")."))
+                return done(StepOutcome(.failed, .none, "Couldn't find \(RecordedAction.quote(label)) in \(app.localizedName ?? "the app") within \(Int(Self.timeout(step))) s."))
             }
+            AXUIElementPerformAction(element, "AXScrollToVisible" as CFString)
             if step.parameters["action"] == "focus" {
                 AXUIElementSetAttributeValue(element, kAXFocusedAttribute as CFString, kCFBooleanTrue)
-                let focused = AX.focusedElement(pid: app.processIdentifier).map { CFEqual($0, element) } ?? false
-                done(focused ? StepOutcome(.done, .verified, "The cursor is in \(RecordedAction.quote(label)).")
-                             : StepOutcome(.done, .notVerifiable, "Clicked into \(RecordedAction.quote(label)); focus couldn't be read back."))
-            } else {
-                // Pressed through Accessibility, wherever it is on screen; a double-click presses twice.
-                let times = Int(step.parameters["clicks"] ?? "1") ?? 1
-                var result = AXUIElementPerformAction(element, kAXPressAction as CFString)
-                if times > 1, result == .success { usleep(80_000); result = AXUIElementPerformAction(element, kAXPressAction as CFString) }
-                let what = times > 1 ? "Double-clicked" : "Pressed"
-                done(result == .success ? StepOutcome(.done, .notVerifiable, "\(what) \(RecordedAction.quote(label)). What it did can't be read back.")
-                                        : StepOutcome(.failed, .none, "\(RecordedAction.quote(label)) couldn't be pressed."))
+                let focused = AX.focusedElement(pid: pid).map { CFEqual($0, element) } ?? false
+                return done(focused ? StepOutcome(.done, .verified, "The cursor is in \(RecordedAction.quote(label)).\(note)")
+                                    : StepOutcome(.done, .notVerifiable, "Clicked into \(RecordedAction.quote(label)); focus couldn't be read back.\(note)"))
+            }
+            // Pressed through Accessibility, wherever it is on screen; a double-click presses twice.
+            let before = AX.landmarks(pid: pid)
+            let times = Int(step.parameters["clicks"] ?? "1") ?? 1
+            var result = AXUIElementPerformAction(element, kAXPressAction as CFString)
+            if times > 1, result == .success { usleep(80_000); result = AXUIElementPerformAction(element, kAXPressAction as CFString) }
+            guard result == .success else { return done(StepOutcome(.failed, .none, "\(RecordedAction.quote(label)) couldn't be pressed.\(note)")) }
+            let what = times > 1 ? "Double-clicked" : "Pressed"
+            // Then read back what changed: a toggle's other state, or a heading or title with its name.
+            let other = step.target.title.flatMap { Self.toggles[$0] }
+            var shown: String?
+            poll({
+                if let other, AX.find(in: pid, role: step.target.role, name: other, identifier: nil, context: context) != nil {
+                    shown = "\(RecordedAction.quote(other)) is showing"; return true
+                }
+                if let name = step.target.title, Matching.appeared(after: name, before: before, after: AX.landmarks(pid: pid)) {
+                    shown = "\(RecordedAction.quote(Matching.keyword(name))) opened"; return true
+                }
+                return false
+            }, timeout: 3) { _ in
+                done(shown.map { StepOutcome(.done, .verified, "\(what) \(RecordedAction.quote(label)): \($0).\(note)") }
+                     ?? StepOutcome(.done, .notVerifiable, "\(what) \(RecordedAction.quote(label)). What it did can't be read back.\(note)"))
             }
         }
     }
+
+    /// "Wait until" steps: a text shows in the app, or some seconds pass.
+    private func wait(_ step: SkillDefinition.Step, _ done: @escaping (StepOutcome) -> Void) {
+        if step.parameters["action"] == "waitSeconds" {
+            let seconds = Double(step.parameters["seconds"] ?? "") ?? 1
+            return DispatchQueue.main.asyncAfter(deadline: .now() + seconds) {
+                done(StepOutcome(.done, .none, "Waited \(Int(seconds)) s."))
+            }
+        }
+        let text = step.parameters["text"] ?? ""
+        guard !text.isEmpty, let app = step.target.app.flatMap({ NSRunningApplication.runningApplications(withBundleIdentifier: $0).first })
+                ?? NSWorkspace.shared.frontmostApplication else {
+            return done(StepOutcome(.failed, .none, "Nothing to wait for."))
+        }
+        poll({ AX.shows(text, pid: app.processIdentifier) }, timeout: Self.timeout(step)) { shown in
+            done(shown ? StepOutcome(.done, .verified, "\(RecordedAction.quote(text)) shows in \(app.localizedName ?? "the app").")
+                       : StepOutcome(.failed, .none, "\(RecordedAction.quote(text)) didn't show within \(Int(Self.timeout(step))) s."))
+        }
+    }
+
+    /// How long a step waits for what it needs: its own timeout, or 10 s.
+    static func timeout(_ step: SkillDefinition.Step) -> Double { Double(step.parameters["timeout"] ?? "") ?? 10 }
 
     private func type(_ step: SkillDefinition.Step, _ done: @escaping (StepOutcome) -> Void) {
         bringToFront(step) { [self] app in
@@ -134,8 +181,14 @@ final class AppPerformer: StepPerformer {
         }
         bringToFront(step) { app in
             guard app != nil else { return done(StepOutcome(.failed, .none, "\(step.parameters["app"] ?? "The app") couldn't be brought to the front.")) }
+            let field = app.flatMap { AX.focusedElement(pid: $0.processIdentifier) }
+            let before = field.flatMap { AX.string($0, kAXValueAttribute, limit: 10_000) }
             Self.post(code, flags)
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                // ↩ in a field that had text: it's submitted when the text changes or clears.
+                if keys == "↩", let field, let before, !before.isEmpty, AX.string(field, kAXValueAttribute, limit: 10_000) != before {
+                    return done(StepOutcome(.done, .verified, "Pressed ↩; the field was submitted."))
+                }
                 done(StepOutcome(.done, .notVerifiable, "Pressed \(keys). What it did can't be read back."))
             }
         }
@@ -175,8 +228,8 @@ final class AppPerformer: StepPerformer {
     }
 
     /// Checks `condition` every 0.25 s until it holds or the timeout passes, then calls `then`.
-    private func poll(_ condition: @escaping () -> Bool, then: @escaping (Bool) -> Void) {
-        let deadline = Date().addingTimeInterval(Self.timeout)
+    private func poll(_ condition: @escaping () -> Bool, timeout: Double = 5, then: @escaping (Bool) -> Void) {
+        let deadline = Date().addingTimeInterval(timeout)
         func check() {
             if cancelled { return }
             if condition() { return then(true) }

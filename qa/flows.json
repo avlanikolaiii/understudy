@@ -57,6 +57,7 @@
         {"action": "stopRun", "from": "run.running", "to": "notch.receipt"},
         {"action": "seeRunReceipt", "from": "page.Skills", "to": "run.receipt"},
         {"action": "backToSkills", "from": "run.receipt", "to": "page.Skills"},
+        {"action": "resumeRun", "from": "run.receipt", "to": "run.running"},
         {"action": "editTrigger", "from": "page.Skills", "to": "trigger.set"},
         {"action": "editSkill", "from": "page.Skills", "to": "page.Skills"},
         {"action": "deleteSkill", "from": "page.Skills", "to": "page.Skills"},
