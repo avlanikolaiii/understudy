@@ -10,7 +10,7 @@ struct SelfTestOptions {
     let sessions: Int
     let seed: UInt64
     let out: URL
-    let libraryFile: LocalLibraryFile
+    let libraryFile: LocalStore
     let clock = TestClock()
 
     init?(arguments: [String]) {
@@ -21,7 +21,7 @@ struct SelfTestOptions {
         let outArg = arguments.first(where: { $0.hasPrefix("--self-test-out=") })?.dropFirst("--self-test-out=".count)
         out = URL(fileURLWithPath: outArg.map(String.init) ?? NSTemporaryDirectory() + "understudy-self-test")
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent("understudy-self-test-\(UUID().uuidString)")
-        libraryFile = LocalLibraryFile(url: dir.appendingPathComponent("library.json"))
+        libraryFile = LocalStore(url: dir.appendingPathComponent("library.json"))
     }
 
     /// Screen captures run the notch at real speed. Simulated sessions run it 1,000× faster,
@@ -112,50 +112,50 @@ final class SelfTest {
     private func captureEveryScreen() async {
         app.openWorkspace()
         for page in PrototypePage.allCases where page != .teach {
-            app.ui.page = page
+            app.env.ui.page = page
             await pump(250)
             snapshot(mainWindow, name: "page-\(page.rawValue)")
         }
-        app.ui.page = .teach
-        app.ui.teachingStep = 0
+        app.env.ui.page = .teach
+        app.env.ui.teachingStep = 0
         await pump(250)
         snapshot(mainWindow, name: "teach-1-describe")
-        app.ui.startWatch(app.watch)
+        app.env.ui.startWatch(app.env.watch)
         advance(12)
         await pump(settle)
         snapshot(mainWindow, name: "teach-2-show")
         snapshot(notchWindow, name: "notch-watching")
-        app.watch.stop()
+        app.env.watch.stop()
         await pump(settle)
         snapshot(notchWindow, name: "notch-stopped")
-        app.ui.reviewWatch(app.watch)
+        app.env.ui.reviewWatch(app.env.watch)
         await pump(250)
         snapshot(mainWindow, name: "teach-3-review")
-        app.ui.saveReviewedSkill(library: app.library, watch: app.watch, activity: app.activity)
+        app.env.ui.saveReviewedSkill(library: app.env.library, watch: app.env.watch, activity: app.env.activity)
         await pump(settle)
         snapshot(notchWindow, name: "notch-learned")
-        await waitUntil(6) { self.app.activity.mode == .idle }
-        app.ui.scenario = .missing
-        app.ui.rehearseActiveSkill(library: app.library, activity: app.activity)
+        await waitUntil(6) { self.app.env.activity.mode == .idle }
+        app.env.ui.scenario = .missing
+        app.env.ui.rehearseActiveSkill(library: app.env.library, activity: app.env.activity)
         await pump(settle)
         snapshot(notchWindow, name: "notch-rehearsing")
-        await waitUntil(8) { self.app.activity.mode == .receipt }
+        await waitUntil(8) { self.app.env.activity.mode == .receipt }
         await pump(settle)
         snapshot(notchWindow, name: "notch-receipt")
         await pump(200)
         snapshot(mainWindow, name: "page-Receipts-after-rehearsal")
-        app.activity.dismiss()
-        app.activity.playDemo()
+        app.env.activity.dismiss()
+        app.env.activity.playDemo()
         await pump(3_500)
         snapshot(notchWindow, name: "notch-demo")
-        app.activity.dismiss()
+        app.env.activity.dismiss()
         await pump(settle * 2)
         snapshot(notchWindow, name: "notch-idle")
         app.openSettings()
         await pump(250)
         checkSettingsWindow()
         NSApp.windows.first { $0.title == "Understudy Settings" }?.performClose(nil)
-        app.ui.page = .home
+        app.env.ui.page = .home
         await pump(150)
     }
 
@@ -245,7 +245,7 @@ final class SelfTest {
     /// Preconditions mirror the UI: a control is only used while it is on screen and enabled.
     private func step() async {
         steps += 1
-        let ui = app.ui, watch = app.watch, activity = app.activity, library = app.library
+        let ui = app.env.ui, watch = app.env.watch, activity = app.env.activity, library = app.env.library
         let windowOpen = mainWindow?.isVisible == true
         let page = ui.page ?? .home
         typealias Action = (String, () async -> Void)
@@ -327,82 +327,82 @@ final class SelfTest {
 
     private func advance(_ seconds: Int) {
         options.clock.time += TimeInterval(seconds)
-        app.watch.advance()
+        app.env.watch.advance()
     }
 
     private func pressShortcut() async {
-        let wasPlaying = app.watch.isPlaying
-        let before = app.activity.mode
+        let wasPlaying = app.env.watch.isPlaying
+        let before = app.env.activity.mode
         app.shortcutPressed()
         await pump(30)
         if wasPlaying {
-            expect(!app.watch.isPlaying && app.ui.page == .teach && app.ui.teachingStep == 2, "shortcut.stopsWatch",
+            expect(!app.env.watch.isPlaying && app.env.ui.page == .teach && app.env.ui.teachingStep == 2, "shortcut.stopsWatch",
                    "pressing the shortcut during Watch must stop it and open Review")
         } else if before == .idle || before == .demo {
-            expect(app.watch.isPlaying, "shortcut.startsWatch", "pressing the shortcut when idle must start Watch")
+            expect(app.env.watch.isPlaying, "shortcut.startsWatch", "pressing the shortcut when idle must start Watch")
         }
     }
 
     private func tapNotch() async {
-        let expected = app.activity.page
+        let expected = app.env.activity.page
         app.notch.tap()
         await pump(30)
         expect(mainWindow?.isVisible == true, "notch.tapOpensWindow", "clicking the notch must show the main window")
         if expected != .teach {
-            expect(app.ui.page == expected, "notch.tapOpensPage", "clicking the notch must open \(expected.rawValue); got \(app.ui.page?.rawValue ?? "nil")")
+            expect(app.env.ui.page == expected, "notch.tapOpensPage", "clicking the notch must open \(expected.rawValue); got \(app.env.ui.page?.rawValue ?? "nil")")
         }
     }
 
     private func review() {
-        let pending = app.watch.ruleDraft.trimmingCharacters(in: .whitespacesAndNewlines)
-        let taken = app.watch.rules + (pending.isEmpty ? [] : [pending])
-        app.ui.reviewWatch(app.watch)
-        let lines = app.ui.rules.components(separatedBy: .newlines)
+        let pending = app.env.watch.ruleDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+        let taken = app.env.watch.rules + (pending.isEmpty ? [] : [pending])
+        app.env.ui.reviewWatch(app.env.watch)
+        let lines = app.env.ui.rules.components(separatedBy: .newlines)
         for rule in taken where !lines.contains(rule) {
             fail("review.keepsNotes", "note \"\(rule)\" missing from Review")
         }
-        let once = app.ui.rules
-        app.ui.reviewWatch(app.watch)
-        expect(app.ui.rules == once, "review.noDuplicates", "reviewing twice must not duplicate notes")
-        expect(app.ui.teachingStep == 2 && !app.watch.isPlaying, "review.opensReview", "Review must stop Watch and show step 3")
+        let once = app.env.ui.rules
+        app.env.ui.reviewWatch(app.env.watch)
+        expect(app.env.ui.rules == once, "review.noDuplicates", "reviewing twice must not duplicate notes")
+        expect(app.env.ui.teachingStep == 2 && !app.env.watch.isPlaying, "review.opensReview", "Review must stop Watch and show step 3")
     }
 
     private func save() async {
-        let before = app.library.skills.count
-        let name = app.ui.skillName.trimmingCharacters(in: .whitespacesAndNewlines)
-        app.ui.saveReviewedSkill(library: app.library, watch: app.watch, activity: app.activity)
+        let before = app.env.library.skills.count
+        let name = app.env.ui.skillName.trimmingCharacters(in: .whitespacesAndNewlines)
+        app.env.ui.saveReviewedSkill(library: app.env.library, watch: app.env.watch, activity: app.env.activity)
         await pump(20)
-        expect(app.library.skills.count == before + 1, "save.addsOneSkill", "saving must add exactly one skill")
-        expect(app.library.skills.last?.name == name, "save.trimsName", "the saved name must be the trimmed name")
-        expect(app.ui.page == .skills && !app.watch.isPresented, "save.opensSkills", "saving must end Watch and open Skills")
-        expect(app.activity.mode == .learned, "save.showsNewSkill", "the notch must show New skill after saving")
+        expect(app.env.library.skills.count == before + 1, "save.addsOneSkill", "saving must add exactly one skill")
+        expect(app.env.library.skills.last?.name == name, "save.trimsName", "the saved name must be the trimmed name")
+        expect(app.env.ui.page == .skills && !app.env.watch.isPresented, "save.opensSkills", "saving must end Watch and open Skills")
+        expect(app.env.activity.mode == .learned, "save.showsNewSkill", "the notch must show New skill after saving")
     }
 
     private func rehearse() async {
-        let before = app.library.receipts.count
-        let missing = app.ui.scenario == .missing
-        app.ui.rehearseActiveSkill(library: app.library, activity: app.activity)
+        let before = app.env.library.receipts.count
+        let missing = app.env.ui.scenario == .missing
+        app.env.ui.rehearseActiveSkill(library: app.env.library, activity: app.env.activity)
         visit("notch.rehearsing")
-        expect(app.activity.mode == .rehearsing && app.activity.dot == .rehearse, "rehearse.showsReadOnly",
+        expect(app.env.activity.mode == .rehearsing && app.env.activity.dot == .rehearse, "rehearse.showsReadOnly",
                "rehearsing must show the blue read-only strip")
-        await waitUntil(3) { self.app.library.receipts.count > before || self.app.activity.mode != .rehearsing }
-        expect(app.library.receipts.count == before + 1, "rehearse.addsOneReceipt", "a finished rehearsal must add exactly one receipt")
-        guard let receipt = app.library.receipts.first else { return }
+        await waitUntil(3) { self.app.env.library.receipts.count > before || self.app.env.activity.mode != .rehearsing }
+        expect(app.env.library.receipts.count == before + 1, "rehearse.addsOneReceipt", "a finished rehearsal must add exactly one receipt")
+        guard let receipt = app.env.library.receipts.first else { return }
         expect(receipt.missingSpend == missing, "rehearse.caseMatches", "the receipt must match the chosen case")
         if missing {
             expect(receipt.report.contains("(DRAFT, incomplete)") && receipt.report.contains("[missing: needs input]"),
                    "rehearse.missingIsDraft", "a missing-spend report must be an incomplete draft that never estimates")
-            expect(app.activity.detail == "Not ready to send", "rehearse.notchNotReady", "the notch must say Not ready to send")
+            expect(app.env.activity.detail == "Not ready to send", "rehearse.notchNotReady", "the notch must say Not ready to send")
         }
-        expect(app.ui.page == .results && app.ui.selectedReceipt == receipt.id, "rehearse.opensReceipt",
+        expect(app.env.ui.page == .results && app.env.ui.selectedReceipt == receipt.id, "rehearse.opensReceipt",
                "a finished rehearsal must open its receipt")
     }
 
     private func export() {
-        guard let receipt = app.library.receipts.first else { return }
+        guard let receipt = app.env.library.receipts.first else { return }
         let url = FileManager.default.temporaryDirectory.appendingPathComponent("understudy-export-\(UUID().uuidString).md")
         do {
-            try app.library.write(receipt, to: url)
+            try app.env.library.write(receipt, to: url)
             visit("modal.export.write")
         } catch {
             fail("export.readsBack", "export write/read-back failed: \(error.localizedDescription)")
@@ -422,24 +422,24 @@ final class SelfTest {
 
     private func checkPersistence() {
         let reloaded = SkillLibrary(auth: AppModel(config: nil), file: options.libraryFile)
-        expect(reloaded.skills.map(\.id) == app.library.skills.map(\.id), "persist.skills", "skills must survive a relaunch")
-        expect(reloaded.receipts.map(\.id) == app.library.receipts.map(\.id), "persist.receipts", "receipts must survive a relaunch")
+        expect(reloaded.skills.map(\.id) == app.env.library.skills.map(\.id), "persist.skills", "skills must survive a relaunch")
+        expect(reloaded.receipts.map(\.id) == app.env.library.receipts.map(\.id), "persist.receipts", "receipts must survive a relaunch")
     }
 
     // MARK: Rules checked after every step
 
     private func checkInvariants() {
-        let ui = app.ui, activity = app.activity
+        let ui = app.env.ui, activity = app.env.activity
         expect(ui.page != nil && (0...2).contains(ui.teachingStep), "state.valid", "page must be set and Teach step within 1–3")
-        expect(app.library.mode == .sample && app.model.client == nil, "sample.noServer", "a Mac without a server stays in Sample mode")
-        expect(!app.library.skills.isEmpty, "skills.nonEmpty", "there is always at least one skill")
+        expect(app.env.library.mode == .sample && app.env.model.client == nil, "sample.noServer", "a Mac without a server stays in Sample mode")
+        expect(!app.env.library.skills.isEmpty, "skills.nonEmpty", "there is always at least one skill")
         expect(activity.rows.count <= 4, "notch.rowCap", "the notch shows at most 4 rows")
         if activity.mode != .idle {
             expect(activity.footer.contains("Simulated") || activity.footer.contains("Concept demonstration"),
                    "notch.honestLabel", "every notch state must say Simulated or Concept demonstration")
         }
 
-        if app.watch.isPlaying && activity.mode != .demo && ![NotchActivity.Mode.learned, .rehearsing, .receipt].contains(activity.mode) {
+        if app.env.watch.isPlaying && activity.mode != .demo && ![NotchActivity.Mode.learned, .rehearsing, .receipt].contains(activity.mode) {
             expect(activity.mode == .watching && activity.dot == .pulse, "notch.watching", "a playing Watch must show the pulsing Watching strip")
         }
     }
@@ -451,20 +451,20 @@ final class SelfTest {
         func mismatch(_ mode: NotchActivity.Mode) -> Bool {
             (mode == .idle && app.notch.isExpanded) || (active.contains(mode) && !app.notch.isExpanded)
         }
-        let mode = app.activity.mode
+        let mode = app.env.activity.mode
         guard mismatch(mode) else { return }
         await pump(100)
-        guard app.activity.mode == mode, mismatch(mode) else { return }
+        guard app.env.activity.mode == mode, mismatch(mode) else { return }
         fail(mode == .idle ? "notch.idleCollapsed" : "notch.activeExpanded",
              mode == .idle ? "an idle notch must be collapsed" : "an active notch must be open (\(mode))")
     }
 
     private func recordNodes() {
-        visit("page.\(app.ui.page?.rawValue ?? "none")")
-        if app.ui.page == .teach { visit("teach.step\(app.ui.teachingStep + 1)") }
-        visit("notch.\(app.activity.mode)")
+        visit("page.\(app.env.ui.page?.rawValue ?? "none")")
+        if app.env.ui.page == .teach { visit("teach.step\(app.env.ui.teachingStep + 1)") }
+        visit("notch.\(app.env.activity.mode)")
         visit(mainWindow?.isVisible == true ? "window.main.open" : "window.main.closed")
-        visit("account.\(app.model.phase == .notConfigured ? "notConfigured" : "other")")
+        visit("account.\(app.env.model.phase == .notConfigured ? "notConfigured" : "other")")
     }
 
     // MARK: Helpers

@@ -16,12 +16,17 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 OUT = ROOT / "qa" / "out"
 APP = ROOT / "apps/mac/build/Understudy.app/Contents/MacOS/Understudy"
 SRC = "apps/mac/Sources/Understudy"
-CHECKS = {  # name: (extra swiftc flags, sources, test)
-    "report":    ([], ["ReportEngine"], "ReportChecks"),
+CORE = ROOT / "apps/mac/Sources/UnderstudyCore"
+CORE_OUT = OUT / "core"
+# Every check links UnderstudyCore, built once as a module by build_core().
+CORE_FLAGS = ["-parse-as-library", "-I", str(CORE_OUT), "-L", str(CORE_OUT), "-lUnderstudyCore"]
+CHECKS = {  # name: (extra swiftc flags, app sources, test)
+    "report":    ([], [], "ReportChecks"),
+    "definition": ([], [], "SkillDefinitionChecks"),
     "library":   ([], ["Library"], "PrototypeChecks"),
     "watch":     ([], ["WatchSession"], "WatchChecks"),
     "workspace": ([], ["Library", "WatchSession", "WorkspaceState"], "WorkspaceChecks"),
-    "notch":     (["-parse-as-library"], ["Library", "WatchSession", "WorkspaceState", "NotchActivity"], "NotchChecks"),
+    "notch":     ([], ["Library", "WatchSession", "WorkspaceState", "NotchActivity"], "NotchChecks"),
     "shortcut":  ([], ["KeyboardShortcut"], "ShortcutChecks"),
 }
 
@@ -32,11 +37,23 @@ def sh(cmd, cwd=ROOT, timeout=3600):
     return proc.returncode, proc.stdout + proc.stderr, round(time.time() - started, 1)
 
 
+def build_core():
+    """Compiles UnderstudyCore into a static library and module, as SwiftPM would."""
+    CORE_OUT.mkdir(parents=True, exist_ok=True)
+    return sh(["swiftc", "-emit-library", "-static", "-emit-module", "-parse-as-library", "-module-name", "UnderstudyCore",
+               *sorted(str(f) for f in CORE.glob("*.swift")),
+               "-emit-module-path", str(CORE_OUT / "UnderstudyCore.swiftmodule"), "-o", str(CORE_OUT / "libUnderstudyCore.a")])
+
+
 def run_checks():
+    code, log, _ = build_core()
+    if code != 0:
+        return {"suite": "checks", "passed": 0, "total": len(CHECKS),
+                "checks": [{"name": "core", "ok": False, "seconds": 0, "passes": [], "error": log[-600:]}]}
     results = []
     for name, (flags, sources, test) in CHECKS.items():
         binary = OUT / f"check-{name}"
-        code, log, secs = sh(["swiftc", *flags, *[f"{SRC}/{s}.swift" for s in sources],
+        code, log, secs = sh(["swiftc", *flags, *CORE_FLAGS, *[f"{SRC}/{s}.swift" for s in sources],
                               f"apps/mac/Tests/{test}.swift", "-o", str(binary)])
         if code == 0:
             code, log, run_secs = sh([str(binary)])
@@ -83,7 +100,9 @@ def run_web():
 
 def run_eval():
     binary = OUT / "eval-holdout"
-    code, log, _ = sh(["swiftc", f"{SRC}/ReportEngine.swift", "qa/eval-holdout.swift", "-o", str(binary)])
+    code, log, _ = build_core()
+    if code == 0:
+        code, log, _ = sh(["swiftc", *CORE_FLAGS, "qa/eval-holdout.swift", "-o", str(binary)])
     if code != 0:
         return {"suite": "eval-holdout", "passed": 0, "total": 1, "weeks": [], "error": log[-400:]}
     return fresh_report(OUT / "eval-holdout.json", [str(binary), str(OUT / "eval-holdout.json")], suite="eval-holdout")

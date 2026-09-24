@@ -1,31 +1,53 @@
 import Foundation
+import UnderstudyCore
 
 /// One skill type for the whole app, in sample mode (saved on this Mac) and in an account (Supabase).
-/// Skills are prepared from the simulated Watch replay. They are not learned by AI.
+/// What the skill does is its `definition`. Skills saved from the simulated Watch replay have
+/// notes but no learned steps, and their definition says so (`simulated`).
 struct Skill: Codable, Identifiable, Equatable {
     var id = UUID()
     var name: String
     var client: String
-    var rules: String
     /// The seeded example skill. Taught (simulated) skills are `false`.
     var isSample = false
+    var definition: SkillDefinition
+
+    /// The person's notes, one per line.
+    var rules: String { definition.notes }
 
     static let sample = Skill(name: "Weekly client update", client: "Norte Studio",
                               rules: "Flag missing figures. Keep the summary concise. Wait for my review before sharing.",
                               isSample: true)
 
     init(id: UUID = UUID(), name: String, client: String, rules: String, isSample: Bool = false) {
-        self.id = id; self.name = name; self.client = client; self.rules = rules; self.isSample = isSample
+        self.init(id: id, name: name, client: client, definition: .prepared(notes: rules), isSample: isSample)
     }
 
-    // Files saved by the earlier interface prototype have no `isSample` key.
+    init(id: UUID = UUID(), name: String, client: String, definition: SkillDefinition, isSample: Bool = false) {
+        self.id = id; self.name = name; self.client = client; self.definition = definition; self.isSample = isSample
+    }
+
+    private enum CodingKeys: String, CodingKey { case id, name, client, isSample, definition, rules }
+
+    // Files saved by the earlier interface prototype have `rules` text instead of a definition,
+    // and the first ones have no `isSample` key.
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         id = try c.decode(UUID.self, forKey: .id)
         name = try c.decode(String.self, forKey: .name)
         client = try c.decode(String.self, forKey: .client)
-        rules = try c.decode(String.self, forKey: .rules)
+        definition = try c.decodeIfPresent(SkillDefinition.self, forKey: .definition)
+            ?? .prepared(notes: try c.decodeIfPresent(String.self, forKey: .rules) ?? "")
         isSample = try c.decodeIfPresent(Bool.self, forKey: .isSample) ?? (name == Skill.sample.name && client == Skill.sample.client)
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(id, forKey: .id)
+        try c.encode(name, forKey: .name)
+        try c.encode(client, forKey: .client)
+        try c.encode(isSample, forKey: .isSample)
+        try c.encode(definition, forKey: .definition)
     }
 }
 
@@ -104,17 +126,34 @@ enum SampleEngine {
     }
 }
 
-/// Sample mode storage: a JSON file on this Mac. A file that can't be read is never overwritten.
-struct LocalLibraryFile {
+/// This Mac's copy of the library: sample mode before sign-in. A file that can't be read, or was
+/// written by a newer Understudy, is never overwritten. Version 1 is the interface prototype's
+/// file, which had no version and stored notes as `rules` text; it loads unchanged.
+struct LocalStore {
     struct Contents: Codable {
+        static let currentVersion = 2
+        var version = Contents.currentVersion
         var skills: [Skill]
         var receipts: [Receipt]
+
+        init(skills: [Skill], receipts: [Receipt]) { self.skills = skills; self.receipts = receipts }
+
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            let version = try c.decodeIfPresent(Int.self, forKey: .version) ?? 1
+            guard version <= Contents.currentVersion else {
+                throw DecodingError.dataCorruptedError(forKey: .version, in: c,
+                    debugDescription: "Saved by a newer Understudy (format \(version)).")
+            }
+            skills = try c.decode([Skill].self, forKey: .skills)
+            receipts = try c.decode([Receipt].self, forKey: .receipts)
+        }
     }
 
     let url: URL
 
-    static var standard: LocalLibraryFile {
-        LocalLibraryFile(url: FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+    static var standard: LocalStore {
+        LocalStore(url: FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("Understudy/interface-prototype.json"))
     }
 
@@ -125,6 +164,8 @@ struct LocalLibraryFile {
     }
 
     func save(_ contents: Contents) throws {
+        var contents = contents
+        contents.version = Contents.currentVersion
         try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
         try JSONEncoder().encode(contents).write(to: url, options: .atomic)
     }
