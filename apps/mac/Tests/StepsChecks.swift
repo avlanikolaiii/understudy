@@ -17,13 +17,26 @@ struct StepsChecks {
             A(t: 22.5, kind: .appSwitch, app: "Dia", bundle: "company.thebrowser.dia"),
         ], notes: [], video: "screen.mov")
         let steps = StepsFromRecording.steps(from: take)
-        precondition(steps.map(\.intent) == ["Open Superhuman", "Type “gi”", "Press ⌘K", "Type “open”", "Press ↩", "Open Dia"])
+        // Letters pressed in the inbox (not a text field) are shortcuts: one key press each, never typed text.
+        // "open" went into the command bar's text field, so it is typed.
+        precondition(steps.map(\.intent) == ["Open Superhuman", "Press G", "Press I", "Press ⌘K", "Type “open”", "Press ↩", "Open Dia"])
         precondition(steps[0].target.app == "com.superhuman.electron" && steps[0].parameters["action"] == "activate")
-        precondition(steps.map { $0.parameters["action"] ?? "" } == ["activate", "type", "keys", "type", "keys", "activate"])
-        precondition(steps.map(\.id) == (1...6).map { "step-\($0)" })
+        precondition(steps.map { $0.parameters["action"] ?? "" } == ["activate", "keys", "keys", "keys", "type", "keys", "activate"])
+        precondition(!steps.contains { $0.parameters["action"] == "focus" })   // nothing clicks into a field that wasn't clicked
+        precondition(steps.map(\.id) == (1...7).map { "step-\($0)" })
         // Pauses from the recording, between 0.3 and 5 seconds.
-        precondition(steps.map { $0.parameters["after"] ?? "" } == ["0.0", "2.9", "5.0", "1.0", "0.6", "3.5"])
+        precondition(steps.map { $0.parameters["after"] ?? "" } == ["0.0", "2.9", "0.3", "5.0", "1.0", "0.6", "3.5"])
         precondition(steps.allSatisfy { !$0.effect.needsApproval && $0.executor != .unsupported })
+
+        // Watch now records such keys as key presses with their key code; the step keeps it.
+        let archive = StepsFromRecording.steps(from: Recording(id: UUID(), startedAt: Date(), duration: 1, actions: [
+            A(t: 0, kind: .shortcut, app: "Superhuman", bundle: "com.superhuman.electron", text: "E", keyCode: 14),
+            A(t: 1, kind: .typing, app: "Superhuman", element: .init(role: "AXGroup"), text: "Ab"),
+        ], notes: [], video: nil))
+        precondition(archive.map(\.intent) == ["Press E", "Press ⇧A", "Press B"] && archive[0].parameters["keyCode"] == "14")
+        precondition(archive[0].effect == .write && !archive[0].effect.needsApproval)
+        precondition(A(t: 0, kind: .typing, app: "x", element: .init(role: "AXTextArea")).element!.isTextInput)
+        precondition(!A(t: 0, kind: .typing, app: "x", element: .init(role: "AXWebArea")).element!.isTextInput)
 
         // Named controls are pressed; sending or deleting waits for approval; unnamed clicks need the mouse.
         func click(_ role: String, _ title: String?) -> SkillDefinition.Step {
@@ -58,6 +71,6 @@ struct StepsChecks {
         let restored = try! JSONDecoder().decode(SkillDefinition.self, from: JSONEncoder().encode(definition))
         precondition(restored == definition && restored.recording == take.id)
         precondition(StepsFromRecording.steps(from: Recording(id: UUID(), startedAt: Date(), duration: 0, actions: [], notes: [], video: nil)).isEmpty)
-        print("PASS: a real take becomes six steps, Dock clicks merge, pauses kept, named presses, approval words, unsupported clicks, passwords, selections, recording link")
+        print("PASS: a real take becomes seven steps, letters outside text fields are key presses, Dock clicks merge, pauses kept, named presses, approval words, unsupported clicks, passwords, selections, recording link")
     }
 }

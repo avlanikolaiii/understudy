@@ -100,7 +100,9 @@ final class AppPerformer: StepPerformer {
 
     private func keys(_ step: SkillDefinition.Step, _ done: @escaping (StepOutcome) -> Void) {
         let keys = step.parameters["keys"] ?? ""
-        guard let (code, flags) = Self.keyCode(for: keys) else {
+        // The recorded key code when there is one; otherwise the key named in `keys`.
+        let exact = step.parameters["keyCode"].flatMap(Int.init).map { (CGKeyCode($0), Self.flags(in: keys)) }
+        guard let (code, flags) = exact ?? Self.keyCode(for: keys) else {
             return done(StepOutcome(.failed, .none, "Understudy can't press \(keys) yet."))
         }
         guard frontApp(for: step) != nil else {
@@ -145,6 +147,21 @@ final class AppPerformer: StepPerformer {
                        NSHomeDirectory() + "/Applications"]
         return folders.map { URL(fileURLWithPath: $0).appendingPathComponent("\(name).app") }
             .first { FileManager.default.fileExists(atPath: $0.path) }
+    }
+
+    /// The modifiers at the start of "⇧⌘K".
+    static func flags(in keys: String) -> CGEventFlags {
+        var flags: CGEventFlags = []
+        for character in keys.dropLast() {
+            switch character {
+            case "⌃": flags.insert(.maskControl)
+            case "⌥": flags.insert(.maskAlternate)
+            case "⇧": flags.insert(.maskShift)
+            case "⌘": flags.insert(.maskCommand)
+            default: return flags
+            }
+        }
+        return flags
     }
 
     /// "⇧⌘K" → the K key with Shift and Command. Named keys are the symbols Watch records.

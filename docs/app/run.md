@@ -11,9 +11,11 @@ A skill is the recorded steps of a task. Understudy runs them itself on this Mac
 | Dock click on an app, or switching to it | Open the app | Opens it by bundle id and checks it came to the front |
 | Click on a named control (button, menu item, tab, link) | Press "Send" | Finds it by identifier or by role and name through Accessibility, and presses it |
 | Click into a named field | Click in "Subject" | Focuses the field |
-| Typing | Type "open" | Types the text as Unicode key events into the app in front |
-| A key or shortcut (↩, ⇥, ⌘K) | Press ⌘K | Posts that key with its modifiers |
+| Typing into a text field | Type "open" | Types the text as Unicode key events into the app in front |
+| A key or shortcut (↩, ⇥, ⌘K), or a letter pressed outside a text field (E to archive) | Press ⌘K, Press E | Posts exactly that key (its recorded key code) with its modifiers |
 | Click on something without a name, a cell selection, a password | Can't run yet | Shown in the review with the reason |
+
+Rule: a key pressed where no text field had focus is never replayed as text, and a run never clicks into or types into a field unless the recording did. Older recordings that saved such keys as typing (for example "gi" in an inbox) become one key press per letter.
 
 The pause before each step is the one in the recording, between 0.3 and 5 seconds. Controls whose name means sending, paying, or deleting (Send, Enviar, Pay, Delete, Borrar, …) and ⌘↩ wait for approval.
 

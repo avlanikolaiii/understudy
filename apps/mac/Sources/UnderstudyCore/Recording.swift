@@ -39,6 +39,10 @@ public struct RecordedAction: Codable, Equatable, Sendable {
         }
 
         public var isSecure: Bool { role == "AXSecureTextField" || subrole == "AXSecureTextField" }
+        /// A place that takes typed text. Keys pressed anywhere else (an inbox, a list, a web
+        /// page) are shortcuts, like E to archive, and are replayed as key presses, never as text.
+        public var isTextInput: Bool { isSecure || Self.textRoles.contains(role ?? "") }
+        public static let textRoles: Set = ["AXTextField", "AXTextArea", "AXComboBox", "AXSearchField", "AXSecureTextField"]
         /// The words a person would use for it: its title, else its description.
         public var name: String? { [title, description].compactMap { $0 }.first { !$0.isEmpty } }
     }
@@ -56,11 +60,13 @@ public struct RecordedAction: Codable, Equatable, Sendable {
     public var value: String?
     /// Selected spreadsheet cells, e.g. "D5=1200 E5=48".
     public var cells: String?
+    /// For a key press: the key's virtual key code, so a run presses exactly that key.
+    public var keyCode: Int?
 
     public init(t: Double, kind: Kind, app: String, bundle: String? = nil, window: String? = nil, element: Element? = nil,
-                text: String? = nil, value: String? = nil, cells: String? = nil) {
+                text: String? = nil, value: String? = nil, cells: String? = nil, keyCode: Int? = nil) {
         self.t = t; self.kind = kind; self.app = app; self.bundle = bundle; self.window = window
-        self.element = element; self.text = text; self.value = value; self.cells = cells
+        self.element = element; self.text = text; self.value = value; self.cells = cells; self.keyCode = keyCode
         redactSecureFields()
     }
 

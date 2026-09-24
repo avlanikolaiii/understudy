@@ -92,18 +92,23 @@ final class ActionMonitor {
         let pid = app.processIdentifier
         let modifiers = event.modifierFlags.intersection([.command, .control, .option, .shift])
         let named = Self.keyNames[Int(event.keyCode)]
-        if modifiers.contains(.command) || modifiers.contains(.control) || named != nil {
+        // Keys go to a text field only if one has focus. Anywhere else (an inbox, a list) a letter
+        // is a shortcut, like E to archive: it's recorded as a key press, never as typed text.
+        let inTextField = typing?.pid == pid || AX.focusedElement(pid: pid).map(AX.describe)?.isTextInput == true
+        if modifiers.contains(.command) || modifiers.contains(.control) || named != nil || !inTextField {
             // A plain backspace while typing corrects the text being typed. Any other deletion
             // (⌥⌫ for a word, or backspacing into text that was already there) is kept as a key.
             if Int(event.keyCode) == kVK_Delete && modifiers.isEmpty && typing?.text.isEmpty == false {
                 typing?.text.removeLast()
                 return scheduleFlush()
             }
-            // A key like Return, Tab, or an arrow, or a shortcut: it's replayed as pressed.
+            // A key like Return, Tab, or an arrow, a shortcut, or a key outside a text field:
+            // it's replayed as pressed.
             flushTyping()
             let key = named ?? event.charactersIgnoringModifiers?.uppercased() ?? ""
             emit(RecordedAction(t: clock(), kind: .shortcut, app: app.localizedName ?? "App", bundle: app.bundleIdentifier,
-                                window: AX.focusedWindowTitle(pid: pid), text: Self.symbols(modifiers) + key))
+                                window: AX.focusedWindowTitle(pid: pid), text: Self.symbols(modifiers) + key,
+                                keyCode: Int(event.keyCode)))
             readSelection(pid: pid, after: 0.2)
             return
         }

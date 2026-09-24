@@ -8,7 +8,8 @@ import Foundation
 /// Parameters used by the executors:
 /// - `action`: `activate`, `press`, `focus`, `type`, `keys`
 /// - `app`: the app's name (also used to open it when its bundle id isn't known)
-/// - `text` (type), `keys` (keys, e.g. "⌘K" or "↩"), `window` (the window it happened in)
+/// - `text` (type), `keys` (keys, e.g. "⌘K", "↩", or "E"), `keyCode` (the exact key, when recorded),
+///   `window` (the window it happened in)
 /// - `after`: seconds to wait before the step, from the pause in the recording
 /// - `reason`: why an unsupported step can't run
 public enum StepsFromRecording {
@@ -29,7 +30,7 @@ public enum StepsFromRecording {
     public static func steps(from recording: Recording) -> [Step] {
         var steps: [Step] = []
         var previousTime = recording.actions.first?.t ?? 0
-        for action in recording.actions {
+        for action in recording.actions.flatMap(keyPresses) {
             let after = steps.isEmpty ? 0 : min(5, max(0.3, action.t - previousTime))
             previousTime = action.t
             guard var step = step(for: action) else { continue }
@@ -44,6 +45,20 @@ public enum StepsFromRecording {
             steps.append(step)
         }
         return steps
+    }
+
+    /// Keys "typed" where there was no text field (e.g. G then I in an inbox, recorded before
+    /// Watch told them apart) are key presses: one step per key, never text typed into a field.
+    static func keyPresses(_ action: RecordedAction) -> [RecordedAction] {
+        guard action.kind == .typing, let element = action.element, !element.isTextInput, let text = action.text else { return [action] }
+        return text.enumerated().map { offset, character in
+            var key = action
+            key.kind = .shortcut
+            key.t = action.t + Double(offset) * 0.3
+            key.text = (character.isUppercase ? "⇧" : "") + String(character).uppercased()
+            key.element = nil; key.value = nil
+            return key
+        }
     }
 
     static func step(for action: RecordedAction) -> Step? {
@@ -92,8 +107,12 @@ public enum StepsFromRecording {
             let keys = action.text ?? ""
             parameters["action"] = "keys"
             parameters["keys"] = keys
+            if let code = action.keyCode { parameters["keyCode"] = String(code) }
+            // A single key outside a text field is an app's shortcut (E archives in some mail apps):
+            // it changes something, but it's pressed exactly as recorded.
+            let effect: Step.Effect = keys == "⌘↩" ? .send : keys == "⌘⌫" ? .delete : keys.count == 1 && keys.first!.isLetter ? .write : .read
             return Step(id: "", intent: "Press \(keys)", executor: .keyboard, target: .init(app: action.bundle),
-                        effect: keys == "⌘↩" ? .send : keys == "⌘⌫" ? .delete : .read, evidence: .none, parameters: parameters)
+                        effect: effect, evidence: .none, parameters: parameters)
         case .selection:
             parameters["reason"] = "Selecting cells can't be replayed yet."
             return Step(id: "", intent: "Select \(action.cells.map(RecordedAction.addresses) ?? "cells") in \(action.app)",
