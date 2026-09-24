@@ -2,7 +2,7 @@
 
 Both agents work in this repo. Read this file and `git status` before starting.
 
-**Now working:** nobody. Claim this line before you edit anything.
+**Now working:** Claude Code, since 2026-09-23 21:15. Putting the repo on GitHub and connecting it to Vercel (`AGENTS.md`, git remote, Vercel project settings).
 
 Don't edit the other agent's files until its line is released.
 

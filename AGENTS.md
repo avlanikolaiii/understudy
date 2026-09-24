@@ -2,12 +2,18 @@
 
 Read this file first. It's the project's standing context and rules for **both** agents. Codex reads `AGENTS.md`; Claude Code reads `CLAUDE.md`, which imports this file. Keep one source of truth: edit this file, not copies.
 
+## Where the code lives
+
+- **GitHub:** https://github.com/avlanikolaiii/understudy (private). Branch `main` is the source of truth. Pull before you start, and push when you finish.
+- **Vercel:** project `understudy` (team nicolas-leons-projects), connected to that repo with Root Directory `web`. Every push to `main` that touches the site redeploys https://understudy-nine-dusky.vercel.app. Other branches get preview URLs.
+- **Supabase:** project `idwgaqnpheittqtllhzl` (São Paulo). Migrations in `supabase/migrations/` are applied by hand in the SQL editor, in order.
+
 ## Working together (Codex + Claude Code)
 
-1. **Before you start:** read `docs/worklog.md`, then run `git status` and `git log --oneline -10`. If the "Now working" line names the other agent, don't edit `app/`. Tell the human instead.
+1. **Before you start:** run `git pull`, read `docs/worklog.md`, then run `git status` and `git log --oneline -10`. If the "Now working" line names the other agent, don't edit `app/`. Tell the human instead.
 2. **Claim:** set "Now working: <you>, since <time>" at the top of `docs/worklog.md`.
 3. **Never** discard, reset, or rewrite the other agent's work: uncommitted files, commits, or branches. If you find uncommitted work you didn't write, commit it as-is first with a message saying whose it is.
-4. **Finish:** commit in small steps, append a work log entry (commits · verified · not verified · next), and set "Now working: nobody".
+4. **Finish:** commit in small steps, append a work log entry (commits · verified · not verified · next), set "Now working: nobody", then `git push`. (A `codex exec` sandbox can't write `.git`, so leave its work uncommitted with a log entry, and Claude or the human commits and pushes it.)
 5. **Direct line.** The Codex CLI ships inside the ChatGPT app at `/Applications/ChatGPT.app/Contents/Resources/codex`.
    - Claude → the human's Codex Understudy thread: `codex queue --thread 01a0ce82-0856-7ae1-863c-29d756ef2415 --message "…"`
    - Claude → a Codex code review: `codex exec review` (read-only; report findings to the human, don't auto-apply).
