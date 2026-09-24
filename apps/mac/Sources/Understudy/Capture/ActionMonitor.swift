@@ -3,7 +3,7 @@ import Carbon.HIToolbox
 import UnderstudyCore
 
 /// Notes what the person does in other apps while Watch records: which app is in front, what they
-/// click (and what it is), what they type and where, shortcuts, and spreadsheet selections.
+/// click (and what it is), what they type and where, keys and shortcuts, and spreadsheet selections.
 /// It needs Accessibility access. Nothing typed into a password field is recorded, and macOS
 /// withholds keystrokes entirely while secure input is on. Events inside Understudy aren't seen.
 @MainActor
@@ -12,16 +12,31 @@ final class ActionMonitor {
     private var observers: [NSObjectProtocol] = []
     private var clock: () -> Double = { 0 }
     private var emit: (RecordedAction) -> Void = { _ in }
-    private var typed = ""
-    private var typedAt = 0.0
-    private var typedPid: pid_t = 0
+    /// Changes on every start and stop, so a delayed read from an earlier take is dropped.
+    private var take = 0
+    private var typing: Typing?
     private var flushTimer: Timer?
     private var lastCells: [pid_t: String] = [:]
+    /// Apps whose spreadsheet selection is read shortly after a click or key; read at once on stop.
+    private var pendingSelections: Set<pid_t> = []
+
+    /// Text typed into one field. The field is fixed when typing starts, so a later change of
+    /// focus can't move the text to another field, or out of a password field.
+    private struct Typing {
+        let pid: pid_t
+        let app: NSRunningApplication
+        let field: AXUIElement?
+        let element: RecordedAction.Element?
+        let window: String?
+        let t: Double
+        var text = ""
+    }
 
     /// Seconds without typing after which the typed text is recorded as one action.
     static let typingPause = 1.5
 
     func start(clock: @escaping () -> Double, emit: @escaping (RecordedAction) -> Void) {
+        take += 1
         self.clock = clock
         self.emit = emit
         // Global monitors call back on the main thread.
@@ -38,13 +53,16 @@ final class ActionMonitor {
         })
     }
 
+    /// Records what is still pending (typing, a selection about to be read), then stops listening.
     func stop() {
         flushTyping()
+        for pid in pendingSelections { recordSelection(pid: pid) }
+        pendingSelections = []
+        take += 1
         monitors.forEach(NSEvent.removeMonitor)
         monitors = []
         observers.forEach(NSWorkspace.shared.notificationCenter.removeObserver)
         observers = []
-        flushTimer?.invalidate(); flushTimer = nil
         lastCells = [:]
     }
 
@@ -53,12 +71,8 @@ final class ActionMonitor {
     private func activated(_ app: NSRunningApplication) {
         guard app.processIdentifier != getpid(), app.activationPolicy == .regular else { return }
         flushTyping()
-        let t = clock(), pid = app.processIdentifier
-        // The window title is ready once the app has finished coming forward.
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [self] in
-            emit(RecordedAction(t: t, kind: .appSwitch, app: app.localizedName ?? "App", bundle: app.bundleIdentifier,
-                                window: AX.focusedWindowTitle(pid: pid)))
-        }
+        emit(RecordedAction(t: clock(), kind: .appSwitch, app: app.localizedName ?? "App", bundle: app.bundleIdentifier,
+                            window: AX.focusedWindowTitle(pid: app.processIdentifier)))
     }
 
     private func clicked(at location: NSPoint) {
@@ -77,58 +91,76 @@ final class ActionMonitor {
         guard let app = NSWorkspace.shared.frontmostApplication, app.processIdentifier != getpid() else { return }
         let pid = app.processIdentifier
         let modifiers = event.modifierFlags.intersection([.command, .control, .option, .shift])
-        if modifiers.contains(.command) || modifiers.contains(.control) {
+        let named = Self.keyNames[Int(event.keyCode)]
+        if modifiers.contains(.command) || modifiers.contains(.control) || named != nil {
+            if Int(event.keyCode) == kVK_Delete && !modifiers.contains(.command) && typing != nil {
+                if typing?.text.isEmpty == false { typing?.text.removeLast() }
+                return scheduleFlush()
+            }
+            // A key like Return, Tab, or an arrow, or a shortcut: it's replayed as pressed.
             flushTyping()
-            let key = event.charactersIgnoringModifiers?.uppercased() ?? ""
+            let key = named ?? event.charactersIgnoringModifiers?.uppercased() ?? ""
             emit(RecordedAction(t: clock(), kind: .shortcut, app: app.localizedName ?? "App", bundle: app.bundleIdentifier,
                                 window: AX.focusedWindowTitle(pid: pid), text: Self.symbols(modifiers) + key))
             readSelection(pid: pid, after: 0.2)
             return
         }
-        switch Int(event.keyCode) {
-        case kVK_Delete:
-            if !typed.isEmpty { typed.removeLast() }
-        case kVK_Return, kVK_ANSI_KeypadEnter, kVK_Tab:
+        guard let characters = event.characters, !characters.isEmpty,
+              characters.unicodeScalars.allSatisfy({ !CharacterSet.controlCharacters.contains($0) }) else { return }
+        if typing?.pid != pid {
             flushTyping()
-            readSelection(pid: pid, after: 0.2)
-        case kVK_LeftArrow, kVK_RightArrow, kVK_UpArrow, kVK_DownArrow, kVK_Escape:
-            flushTyping()
-            readSelection(pid: pid, after: 0.2)
-        default:
-            guard let characters = event.characters, !characters.isEmpty,
-                  characters.unicodeScalars.allSatisfy({ !CharacterSet.controlCharacters.contains($0) }) else { return }
-            if typed.isEmpty || typedPid != pid { flushTyping(); typedAt = clock(); typedPid = pid }
-            typed += characters
+            let field = AX.focusedElement(pid: pid)
+            typing = Typing(pid: pid, app: app, field: field, element: field.map(AX.describe),
+                            window: AX.focusedWindowTitle(pid: pid), t: clock())
         }
+        typing?.text += characters
+        scheduleFlush()
+    }
+
+    // MARK: Recording
+
+    private func scheduleFlush() {
         flushTimer?.invalidate()
         flushTimer = Timer.scheduledTimer(withTimeInterval: Self.typingPause, repeats: false) { _ in
             MainActor.assumeIsolated { self.flushTyping() }
         }
     }
 
-    // MARK: Recording
-
     /// Records what was typed since the last action as one action, with the field it went into.
     private func flushTyping() {
         flushTimer?.invalidate(); flushTimer = nil
-        guard !typed.isEmpty, let app = NSRunningApplication(processIdentifier: typedPid) else { typed = ""; return }
-        let field = AX.focusedElement(pid: typedPid)
-        emit(RecordedAction(t: typedAt, kind: .typing, app: app.localizedName ?? "App", bundle: app.bundleIdentifier,
-                            window: AX.focusedWindowTitle(pid: typedPid), element: field.map(AX.describe),
-                            text: typed, value: field.flatMap { AX.string($0, kAXValueAttribute) }))
-        typed = ""
+        guard let typing, !typing.text.isEmpty else { self.typing = nil; return }
+        self.typing = nil
+        // The init redacts text and value when the field is a password field.
+        emit(RecordedAction(t: typing.t, kind: .typing, app: typing.app.localizedName ?? "App",
+                            bundle: typing.app.bundleIdentifier, window: typing.window, element: typing.element,
+                            text: typing.text, value: typing.field.flatMap { AX.string($0, kAXValueAttribute) }))
     }
 
     /// Records a new spreadsheet selection once the app has reacted to a click or key.
     private func readSelection(pid: pid_t, after seconds: Double) {
+        pendingSelections.insert(pid)
+        let current = take
         DispatchQueue.main.asyncAfter(deadline: .now() + seconds) { [self] in
-            guard !monitors.isEmpty, let cells = AX.selectedCells(pid: pid), cells != lastCells[pid],
-                  let app = NSRunningApplication(processIdentifier: pid) else { return }
-            lastCells[pid] = cells
-            emit(RecordedAction(t: clock(), kind: .selection, app: app.localizedName ?? "App", bundle: app.bundleIdentifier,
-                                window: AX.focusedWindowTitle(pid: pid), cells: cells))
+            guard take == current, pendingSelections.remove(pid) != nil else { return }
+            recordSelection(pid: pid)
         }
     }
+
+    private func recordSelection(pid: pid_t) {
+        guard let cells = AX.selectedCells(pid: pid), cells != lastCells[pid],
+              let app = NSRunningApplication(processIdentifier: pid) else { return }
+        lastCells[pid] = cells
+        emit(RecordedAction(t: clock(), kind: .selection, app: app.localizedName ?? "App", bundle: app.bundleIdentifier,
+                            window: AX.focusedWindowTitle(pid: pid), cells: cells))
+    }
+
+    /// Keys recorded by name so a run can press them again.
+    static let keyNames: [Int: String] = [
+        kVK_Return: "↩", kVK_ANSI_KeypadEnter: "↩", kVK_Tab: "⇥", kVK_Escape: "⎋",
+        kVK_LeftArrow: "←", kVK_RightArrow: "→", kVK_UpArrow: "↑", kVK_DownArrow: "↓",
+        kVK_Delete: "⌫", kVK_ForwardDelete: "⌦",
+    ]
 
     private static func symbols(_ flags: NSEvent.ModifierFlags) -> String {
         (flags.contains(.control) ? "⌃" : "") + (flags.contains(.option) ? "⌥" : "")

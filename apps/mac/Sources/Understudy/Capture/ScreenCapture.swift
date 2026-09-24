@@ -32,9 +32,9 @@ final class ScreenCapture: CaptureSource {
         }
     }
 
-    func stop(done: @escaping (String?) -> Void) {
+    func stop(done: @escaping (VideoResult) -> Void) {
         actions.stop()
-        guard let screen else { return done(nil) }
+        guard let screen else { return done(.none) }
         self.screen = nil
         screen.stop(done: done)
     }

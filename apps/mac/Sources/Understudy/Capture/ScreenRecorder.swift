@@ -37,9 +37,9 @@ final class ScreenRecorder: NSObject, SCContentSharingPickerObserver, SCStreamOu
         picker.present()
     }
 
-    /// Stops recording and finishes the file. `done` gets the file name, or nil if nothing was recorded.
+    /// Stops recording and finishes the file. `done` runs on the main thread.
     @MainActor
-    func stop(done: @escaping (String?) -> Void) {
+    func stop(done: @escaping (VideoResult) -> Void) {
         closePicker()
         ready = nil
         queue.async { [self] in
@@ -143,17 +143,18 @@ final class ScreenRecorder: NSObject, SCContentSharingPickerObserver, SCStreamOu
     }
 
     /// Runs on `queue`.
-    private func finish(_ done: @escaping (String?) -> Void) {
+    private func finish(_ done: @escaping (VideoResult) -> Void) {
         guard let writer, let input, wroteFrames else {
             self.writer?.cancelWriting()
             self.writer = nil; self.input = nil
-            return DispatchQueue.main.async { done(nil) }
+            return DispatchQueue.main.async { done(.none) }
         }
         self.writer = nil; self.input = nil
         input.markAsFinished()
         writer.finishWriting { [url] in
-            let name = writer.status == .completed ? url.lastPathComponent : nil
-            DispatchQueue.main.async { done(name) }
+            let result: VideoResult = writer.status == .completed ? .saved(url.lastPathComponent)
+                : .failed(writer.error?.localizedDescription ?? "The file couldn't be finished.")
+            DispatchQueue.main.async { done(result) }
         }
     }
 }

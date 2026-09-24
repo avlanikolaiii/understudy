@@ -12,9 +12,16 @@ protocol CaptureSource: AnyObject {
     func start(folder: URL, clock: @escaping () -> Double, onAction: @escaping (RecordedAction) -> Void,
                ended: @escaping () -> Void, ready: @escaping (Error?) -> Void)
     /// Stops capturing. Actions still pending (e.g. typing not yet recorded) arrive before this
-    /// returns. `done` gets the video's file name in `folder`, if the screen was recorded; a video
-    /// finishes writing after Stop, so `done` comes later, possibly after another take has started.
-    func stop(done: @escaping (String?) -> Void)
+    /// returns. `done` says whether a video was saved in `folder`; a video finishes writing after
+    /// Stop, so `done` comes later, possibly after another take has started.
+    func stop(done: @escaping (VideoResult) -> Void)
+}
+
+/// How a take's screen video ended.
+enum VideoResult: Equatable {
+    case none
+    case saved(String)
+    case failed(String)
 }
 
 /// Watch: records one demonstration. It starts only when the person asks, shows what it records,
@@ -87,8 +94,15 @@ final class WatchSession: ObservableObject {
         timer?.cancel(); timer = nil
         let take = id, folder = recordingFolder, duration = now() - startedAt
         // Still watching while the source stops, so its last actions (pending typing) are kept.
-        source.stop { [weak self] video in
-            guard let video else { return }
+        source.stop { [weak self] result in
+            let video: String
+            switch result {
+            case .none: return
+            case .failed(let reason):
+                if let self, self.id == take { self.problem = "The screen video couldn't be saved: \(reason) The steps were saved." }
+                return
+            case .saved(let name): video = name
+            }
             // The video finishes after Stop. If another take has started since, update this take's file.
             if let self, self.id == take, let recording = self.recording {
                 self.save(Recording(id: take, startedAt: recording.startedAt, duration: duration,
@@ -193,8 +207,10 @@ final class ScriptedCapture: CaptureSource {
 
     /// When set, `start` fails with this message, as a missing permission would.
     var failure: String?
-    /// When set, `stop` reports a video with this name after the given action, as the recorder does.
+    /// When set, `stop` reports a video with this name a moment later, as the recorder does.
+    /// `failingVideo` reports a failure instead.
     var video: String?
+    static let failingVideo = "fail"
     /// Text "typed" but not yet recorded; `stop` records it first, as `ActionMonitor` does.
     var pendingTyping: String?
     private var clock: () -> Double = { 0 }
@@ -210,14 +226,14 @@ final class ScriptedCapture: CaptureSource {
         ready(nil)
     }
 
-    func stop(done: @escaping (String?) -> Void) {
+    func stop(done: @escaping (VideoResult) -> Void) {
         if let text = pendingTyping {
             onAction?(RecordedAction(t: clock(), kind: .typing, app: "TextEdit", element: .init(role: "AXTextArea"), text: text))
             pendingTyping = nil
         }
         onAction = nil; ended = nil
-        guard let name = video else { return done(nil) }
-        finishing.append { done(name) }
+        guard let name = video else { return done(.none) }
+        finishing.append { done(name == Self.failingVideo ? .failed("The disk is full.") : .saved(name)) }
     }
 
     /// Finishes the videos of stopped takes, as the recorder does a moment after Stop.

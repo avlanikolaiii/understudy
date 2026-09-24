@@ -352,7 +352,8 @@ final class SelfTest {
     /// video for each take, finished later, as the recorder does.
     private var script: ScriptedCapture {
         let script = app.env.capture as! ScriptedCapture
-        script.video = "screen.mov"
+        // Now and then the video can't be saved (e.g. the disk is full); Watch must say so.
+        script.video = rng.chance(5) ? ScriptedCapture.failingVideo : "screen.mov"
         return script
     }
 
@@ -477,7 +478,7 @@ final class SelfTest {
                    "notch.honestLabel", "every simulated notch state must say Simulated or Concept demonstration")
         }
         let watch = app.env.watch
-        expect(watch.problem == nil || watch.phase == .idle, "watch.problemMeansIdle", "Watch shows a problem only when it isn't running")
+        expect(watch.problem == nil || !watch.isWatching, "watch.problemMeansNotWatching", "Watch shows a problem only when it isn't recording")
         expect(!watch.isPresented || watch.actions.count <= ScriptedCapture.script.count, "watch.actionsInOrder",
                "Watch records each action once")
         if watch.phase == .stopped {

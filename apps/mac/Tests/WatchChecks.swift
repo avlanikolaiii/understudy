@@ -98,6 +98,18 @@ struct WatchChecks {
         precondition(session.isWatching && session.recording == nil)
         session.dismiss()
         capture.finishVideos()
+
+        // A video that can't be saved is reported; the steps are kept.
+        capture.video = ScriptedCapture.failingVideo
+        session.start(automaticTicks: false)
+        capture.emitNext()
+        session.stop()
+        capture.finishVideos()
+        precondition(session.phase == .stopped && session.problem?.contains("couldn't be saved") == true)
+        precondition(session.recording?.actions.count == 1 && session.recording?.video == nil)
+        session.start(automaticTicks: false)
+        precondition(session.problem == nil)
+        session.dismiss()
         capture.video = nil
 
         // Password fields: nothing typed and no value is kept, even if a source reports them.
@@ -114,7 +126,7 @@ struct WatchChecks {
         let stopped = live.elapsedSeconds
         RunLoop.main.run(until: Date().addingTimeInterval(1.1))
         precondition(live.elapsedSeconds == stopped && live.phase == .stopped)
-        print("PASS: start failure, ordered actions on Watch's clock, Stop saves the recording and notes, pending typing kept, sharing ended, late video on its own take, record again, reset, password redaction, and the timer")
+        print("PASS: start failure, ordered actions on Watch's clock, Stop saves the recording and notes, pending typing kept, sharing ended, late video on its own take, video failure reported, record again, reset, password redaction, and the timer")
     }
 }
 
