@@ -15,6 +15,9 @@ All notable changes to this project are recorded here. The format follows
 - `ReportEngine`: a pure-Foundation weekly report with `Decimal` math and half-up rounding that follows `docs/product/report-spec.md`. It matches teaching weeks 1–3 exactly and is not wired into the app yet.
 - App icon: the website's glowing dot.
 - `--notch-demo` launch flag that replays the website's hero sequence in the real notch.
+- `UnderstudyCore`, a pure-Swift module for models and engines. `SkillDefinition` v1 is the skill format the app will run itself: trigger, inputs, steps (executor, target, effect, evidence), rules, and output, with a schema version. Older formats migrate; newer ones are refused.
+- The account (`AccountStore`) and the Mac's versioned file (`LocalStore`) are separate stores. `AppEnvironment` creates the app's objects once.
+- A fixed self-signed signing identity (`scripts/make-signing-identity.sh`), so macOS keeps the app's permissions across builds. The app is now a regular Dock app, as it already behaved.
 
 ### Website (`apps/web`)
 - A static pre-launch site with no dependencies. The home page is the hero only, and each menu item has its own page (workflow, rehearsal, receipts, what exists, pricing, early access), plus privacy and 404 pages.

@@ -16,7 +16,7 @@ Understudy is a macOS companion that lives in the MacBook notch, with a menu bar
 
 | Path | Contents |
 |---|---|
-| `apps/mac/` | macOS app: Swift package, SwiftUI + AppKit. Sources in `Sources/Understudy/`, standalone checks in `Tests/`, build scripts in `scripts/`. |
+| `apps/mac/` | macOS app: Swift package, SwiftUI + AppKit. `Sources/UnderstudyCore/` is pure Swift (models, engines; no UI, no network); `Sources/Understudy/` is the app. Standalone checks in `Tests/`, build scripts in `scripts/`. |
 | `apps/web/` | Pre-launch website: static pages built by `build.mjs` into `dist/`, deployed on Vercel. |
 | `supabase/migrations/` | Database schema, row-level security, and waitlist functions, numbered in order. |
 | `data/fixtures/teaching/` | Synthetic sample agency data (weeks 0–3). Safe to read. |
@@ -29,9 +29,11 @@ Understudy is a macOS companion that lives in the MacBook notch, with a menu bar
 
 - **Main window** (`MainWindowView`, `WorkspaceController`): Home, Teach a skill, Skills, Receipts, and Account. Sign-in happens here only.
 - **Notch** (`NotchController`, `NotchLiveView`, `NotchActivity`): a live strip styled after the website hero. It shows the states Watching → New skill → Rehearsing (read-only) → Receipt. It never takes keyboard input.
-- **Data** (`Library.swift`, `SkillLibrary.swift`): one list of skills and receipts. **Sample mode** stores data on the Mac (`~/Library/Application Support/Understudy/interface-prototype.json`) before sign-in, and the Supabase account stores it after sign-in. Async work from a previous owner is dropped when the user signs in or out.
+- **Skills** (`UnderstudyCore/SkillDefinition.swift`): a skill is a procedure Understudy runs itself, never an export for another AI app. Version 1 holds the trigger, inputs, steps (each with its executor, target, effect, and evidence), rules, and output, and is stored in `skills.definition`. Older formats decode into the current one; newer ones are refused.
+- **Data** (`SkillLibrary.swift`, `AccountStore.swift`, `Library.swift`): one list of skills and receipts. The account (`AccountStore`, Supabase) is the source of truth after sign-in. `LocalStore` is the versioned file on this Mac (`~/Library/Application Support/Understudy/interface-prototype.json`) for Sample mode before sign-in. Async work from a previous owner is dropped when the user signs in or out.
+- **Composition** (`AppEnvironment.swift`): the app's objects are created once here and shared by the main window, the notch, the menus, and the self-test.
 - **Auth** (`AppModel`): Supabase Auth with Google, Apple, and email link, using PKCE and the redirect `understudy://auth-callback`.
-- **Report engine** (`ReportEngine.swift`): pure Foundation, using `Decimal`, and following `docs/product/report-spec.md`.
+- **Report engine** (`UnderstudyCore/ReportEngine.swift`): pure Foundation, using `Decimal`, and following `docs/product/report-spec.md`.
 - **Shortcut** (`KeyboardShortcut.swift`): a Carbon hot key (default ⌥ Space), remappable, that needs no Accessibility permission. It starts Watch; pressing it again stops Watch and opens the review.
 
 ## Build and test
@@ -42,12 +44,8 @@ The toolchain is the Command Line Tools only (no Xcode). Building needs Swift 6.
 |---|---|
 | Build the Mac app | `apps/mac/scripts/bundle.sh` → `apps/mac/build/Understudy.app` |
 | Build the website | `cd apps/web && node build.mjs` → `apps/web/dist/` |
-| Report checks | `swiftc apps/mac/Sources/Understudy/ReportEngine.swift apps/mac/Tests/ReportChecks.swift -o /tmp/c && /tmp/c` |
-| Library checks | `swiftc apps/mac/Sources/Understudy/Library.swift apps/mac/Tests/PrototypeChecks.swift -o /tmp/c && /tmp/c` |
-| Watch checks | `swiftc apps/mac/Sources/Understudy/WatchSession.swift apps/mac/Tests/WatchChecks.swift -o /tmp/c && /tmp/c` |
-| Workspace checks | `swiftc apps/mac/Sources/Understudy/{Library,WatchSession,WorkspaceState}.swift apps/mac/Tests/WorkspaceChecks.swift -o /tmp/c && /tmp/c` |
-| Notch checks | `swiftc -parse-as-library apps/mac/Sources/Understudy/{Library,WatchSession,WorkspaceState,NotchActivity}.swift apps/mac/Tests/NotchChecks.swift -o /tmp/c && /tmp/c` |
-| Shortcut checks | `swiftc apps/mac/Sources/Understudy/KeyboardShortcut.swift apps/mac/Tests/ShortcutChecks.swift -o /tmp/c && /tmp/c` |
+| Checks and held-out eval | `python3 qa/run.py --skip-build --only checks,eval-holdout` (builds `UnderstudyCore` as a module and links each check to it) |
+| Stable signing identity | `apps/mac/scripts/make-signing-identity.sh`, once per Mac. `bundle.sh` then signs with it so macOS keeps the app's privacy permissions across builds. |
 
 Continuous integration builds the app once (macos-15, Swift 6.1), runs the checks and held-out eval, and then installs that same bundle on fresh macos-14, macos-15, and macos-26 runners for simulated users and a real first launch, on every pull request (`.github/workflows/ci.yml`).
 
@@ -55,7 +53,7 @@ Continuous integration builds the app once (macos-15, Swift 6.1), runs the check
 
 `python3 qa/run.py` is the release gate. It uses the standard library only; run it from the repository root on a Mac.
 
-- **Checks:** the six standalone checks.
+- **Checks:** the standalone checks in `apps/mac/Tests/` (the `CHECKS` table in `qa/run.py`).
 - **Self-test:** `Understudy --self-test=SESSIONS,SEED`. It simulates people using the real app objects: random walks over `qa/flows.json` that use only controls on screen and enabled. It checks documented rules after every step and renders every screen to PNG. It uses a temporary library and no server, so your data is never touched.
 - **Website:** `apps/web/qa.mjs` checks every built page.
 - **Held-out eval:** `qa/eval-holdout.swift`. It is the only reader of `data/evaluation/`, and it prints scores only.
@@ -109,7 +107,7 @@ Continuous integration builds the app once (macos-15, Swift 6.1), runs the check
 
 | Service | Details |
 |---|---|
-| GitHub | `avlanikolaiii/understudy` (private). Default branch `main`. |
+| GitHub | `avlanikolaiii/understudy` (private until the human decides to publish it; Apache 2.0). Default branch `main`. |
 | Vercel | Project `understudy` (team `nicolas-leons-projects`), root directory `apps/web`, live at https://understudy-nine-dusky.vercel.app. Deploy with `cd apps/web && npx vercel deploy --prod`. Git integration requires the Vercel GitHub app on the repository. |
 | Supabase | Project `idwgaqnpheittqtllhzl` (São Paulo). Email sign-in is enabled; the redirect `understudy://auth-callback` is allowed. Migrations are applied in order, by hand, in the SQL editor. Waitlist signups are in the `waitlist` table. |
 
@@ -118,21 +116,26 @@ Continuous integration builds the app once (macos-15, Swift 6.1), runs the check
 Reopen these only with the human's approval.
 
 - **Pricing (provisional):** Free $0 (up to 5 skills), Pro $15/month, Team $30/person/month (includes "Cover for me").
-- **Distribution:** a signed, notarized DMG and a zip on GitHub Releases for Sparkle updates. No Homebrew and no Mac App Store.
+- **Execution:** Understudy runs every skill itself, with models called from inside the app. Skills are never exported to, or run inside, Claude, ChatGPT, or Gemini.
+- **Capture:** Watch records a video of the screen (ScreenCaptureKit) and a log of actions, including which button was clicked (Accessibility), only while the person teaches. The recording stays on the Mac; learning sends the action log and key frames to the chosen AI.
+- **Running without the mouse:** steps run through, in order of preference, a connector's API, the app's scripting, Accessibility actions, then the keyboard. A step that would need the mouse is shown to the person as unsupported.
+- **AI:** three modes. Understudy Cloud (default: Claude, ChatGPT, and Gemini through a server-side proxy, paid by a monthly fee), your own API key (stored in the Keychain), and Apple's on-device model.
+- **Distribution:** open source (Apache 2.0). A self-signed DMG on GitHub Releases, without the Apple Developer Program or notarization for now, so the first open shows macOS's downloaded-from-the-internet warning. No Homebrew and no Mac App Store.
 - **The notch** is the product's signature and a live status strip. Sign-in, skills, and receipts live in the main window.
-- **Data:** skills and receipts live in the user's account after sign-in, with a labeled local Sample mode before sign-in.
-- **Website:** one English pre-launch site. The home page is the hero only; each menu item is its own page. There are no download links until a signed build exists.
+- **Data:** skills, receipts, and connections live in each user's cloud account; the copy on the Mac is a cache and the labeled Sample mode before sign-in.
+- **Website:** one English pre-launch site. The home page is the hero only; each menu item is its own page. There are no download links until a working build is released.
 - **Corrections:** a correction applies to the current workflow only in the first prototype.
 
 ## Roadmap
 
-The long-term architecture, what is temporary today, and the phases are in `docs/product/long-term-plan.md`.
+The phases, what is temporary today, and the target architecture are in `docs/product/long-term-plan.md`. Build one real vertical slice first (record the weekly update → learned skill → blind rehearsal → receipt), then widen.
 
-1. **Skill review:** show the learned skill in plain words (trigger, steps, inputs, rules), make rules editable, and save to `skills.definition`.
-2. **Real rehearsal:** drive rehearsal with `ReportEngine` on the teaching weeks instead of fixed sample text, and compare against the sent reports.
-3. **Run and receipt:** write the Markdown report to a local git-ignored folder, read it back as evidence, and save the receipt. When ad spend is missing, the report stays an incomplete draft and the email is held back.
-4. **Google Sheets connector:** read-only scope, and rehearsal uses a read-only token.
-5. **AI proxy:** a Supabase Edge Function that holds the Anthropic key server-side and writes the summary and highlight.
-6. **Sign-in providers:** Google OAuth next. Apple requires the paid Apple Developer Program.
+0. **Foundations:** `UnderstudyCore`, `SkillDefinition` v1, `AccountStore`/`LocalStore`, `AppEnvironment`, a stable signing identity, Apache 2.0.
+1. **Record for real:** screen video and action log replace the simulated Watch.
+2. **AI in three modes:** Understudy Cloud proxy, your own key, Apple on-device.
+3. **Learn:** recording + notes → `SkillDefinition`, with a real skill review.
+4. **Rehearse and run:** `RunEngine` and executors replace `SampleEngine` and the notch timers; receipts with read-back evidence.
+5. **Cloud connectors:** Google (Sheets, Drive, Docs, Gmail), then Microsoft 365, with tokens held server-side.
+6. **Open-source release:** DMG on GitHub Releases, first-launch guidance, website updated to what works, billing for Understudy Cloud.
 
-The capture experiment and customer validation are paused. Keep their files; don't extend them unless asked.
+The capture experiment (`tools/ax-capture`, `docs/research/capture-experiment.md`) is the starting point for phase 1.
