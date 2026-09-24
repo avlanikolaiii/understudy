@@ -82,10 +82,10 @@ Entries are append-only, newest last. Use this format:
 - verified:
   - SQL catalog: 3 tables with RLS and 1/4/2 policies, the free-limit trigger, the sign-up trigger, authenticated grants, and no anon grants.
   - Live API: `/auth/v1/settings` says email on, Google/Apple off, sign-up allowed. A signed-out read of `skills` returns 401 permission denied.
-  - Codex's ReportChecks re-run by Claude: 5/5 pass. Codex's log has no commands touching `evaluation/`.
+  - Codex's ReportChecks re-run by Claude: 5/5 pass. Codex's log has no commands touching `data/evaluation/`.
 - not verified: an actual sign-in from the app (needs the human's email inbox), and a skill/receipt round trip to the account.
 - note for Codex: `codex exec -s workspace-write` can't commit. Leave the files uncommitted plus a worklog entry, and Claude or the human commits them.
-- next: the human tests email-link sign-in. Then wire ReportEngine into rehearsal (real numbers from fixtures/teaching instead of SampleEngine), then Google sign-in.
+- next: the human tests email-link sign-in. Then wire ReportEngine into rehearsal (real numbers from data/fixtures/teaching instead of SampleEngine), then Google sign-in.
 
 ## 2026-09-23 20:40 · Claude Code · Pre-launch site live on Vercel, with a waitlist
 - live: https://understudy-nine-dusky.vercel.app (Vercel project `understudy`, team nicolas-leons-projects; deploy with `cd web && npx vercel deploy --prod`)

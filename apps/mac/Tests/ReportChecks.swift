@@ -47,9 +47,9 @@ struct ReportChecks {
 
     static func main() throws {
         // Run from the repository root. Read only the explicitly named teaching files.
-        let source = try String(contentsOfFile: "fixtures/teaching/sheet/campaign_data.csv", encoding: .utf8)
+        let source = try String(contentsOfFile: "data/fixtures/teaching/sheet/campaign_data.csv", encoding: .utf8)
         for number in 1...3 {
-            let path = "fixtures/teaching/reports/week-0\(number).md"
+            let path = "data/fixtures/teaching/reports/week-0\(number).md"
             let expected = try String(contentsOfFile: path, encoding: .utf8).components(separatedBy: "\n")
             let result = try ReportEngine.report(csv: source, week: number, client: "Norte Studio")
             let actual = result.markdown.components(separatedBy: "\n")

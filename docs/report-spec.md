@@ -46,7 +46,7 @@ A required source figure is **missing** when its cell is blank. Zero is not miss
 
 ## Template sections
 
-See `templates/weekly-update.md`. The four sections and their scoring:
+See `data/templates/weekly-update.md`. The four sections and their scoring:
 
 | Section | Scored how |
 |---|---|

@@ -74,7 +74,7 @@ There used to be two experiences in one binary: the account notch panel and Code
 ## Rules you must follow
 
 - **Honest labels.** Never present simulated behavior as working. Label it "Simulated" or "Concept demonstration" in the UI and the docs. Nothing is "working" without a demo you can reproduce.
-- **Held-out data.** `evaluation/holdout/` contains unseen test weeks. App and learning code must **never** read it. Only a test harness may. Use `fixtures/teaching/` for development and demos.
+- **Held-out data.** `data/evaluation/holdout/` contains unseen test weeks. App and learning code must **never** read it. Only a test harness may. Use `data/fixtures/teaching/` for development and demos.
 - **Read-only rehearsal** across *every* connected account. Write only to a local output folder.
 - **Numbers** follow `docs/report-spec.md` exactly: decimal half-up rounding, and missing data is never estimated.
 - **Secrets** (the Google client secret, Apple `.p8` key, Anthropic key, Supabase service key) never go into the repo or the app. `.gitignore` covers `config.local.json`, `runs/`, `client-examples/`, and the key files.
@@ -98,8 +98,8 @@ There used to be two experiences in one binary: the account notch panel and Code
 | `docs/prototype-1.md`, `docs/report-spec.md` | Prototype scope and the exact report math |
 | `docs/capture-experiment.md`, `tools/ax-capture/` | Capture experiment (paused) and recorder |
 | `docs/validation/` | Interview kit in English and Spanish (paused, nothing sent) |
-| `fixtures/teaching/`, `templates/` | Sample agency data and the report template |
-| `evaluation/holdout/` | **Don't read.** Held-out test weeks |
+| `data/fixtures/teaching/`, `data/templates/` | Sample agency data and the report template |
+| `data/evaluation/holdout/` | **Don't read.** Held-out test weeks |
 
 ## Working style
 

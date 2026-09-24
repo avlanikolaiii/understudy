@@ -29,8 +29,8 @@ Logs go to `runs/`, which git ignores. Password fields are recorded by role only
 
 ### Phase A demonstration script (about 3 minutes)
 
-1. Open `fixtures/teaching/sheet/campaign_data.csv` in Numbers.
-2. Open `templates/weekly-update.md` in TextEdit. Save a copy as `runs/demo-week-01.md`.
+1. Open `data/fixtures/teaching/sheet/campaign_data.csv` in Numbers.
+2. Open `data/templates/weekly-update.md` in TextEdit. Save a copy as `runs/demo-week-01.md`.
 3. In Numbers, click each week-1 cell you'd use: impressions, clicks, spend, and leads for all three channels.
 4. In TextEdit, type the week-1 totals into the Numbers table and write one sentence for Summary.
 5. Stop recording.
