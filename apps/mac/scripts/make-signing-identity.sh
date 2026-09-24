@@ -12,15 +12,20 @@
 # list and nothing is trusted system-wide. Keep .signing/understudy.p12 safe: release builds must
 # keep using the same identity, or people have to grant permissions again.
 set -e
+umask 077   # the private key and its passwords are readable by this user only
+IMPORT=""
+[ -n "$1" ] && IMPORT="$(cd "$(dirname "$1")" && pwd)/$(basename "$1")"   # resolve before changing directory
 cd "$(dirname "$0")/.."
 DIR=.signing
 KEYCHAIN="$PWD/$DIR/understudy.keychain-db"
 NAME="Understudy Open Source"
 mkdir -p "$DIR"
+chmod 700 "$DIR"
+chmod 600 "$DIR"/* 2>/dev/null || true   # repairs files made before this was restricted
 [ -f "$KEYCHAIN" ] && { echo "Already set up: $KEYCHAIN"; exit 0; }
 
-if [ -n "$1" ]; then
-  P12="$1"; P12_PASSWORD="${UNDERSTUDY_P12_PASSWORD:?set UNDERSTUDY_P12_PASSWORD}"
+if [ -n "$IMPORT" ]; then
+  P12="$IMPORT"; P12_PASSWORD="${UNDERSTUDY_P12_PASSWORD:?set UNDERSTUDY_P12_PASSWORD}"
 else
   P12="$DIR/understudy.p12"; P12_PASSWORD="$(openssl rand -hex 16)"
   TMP="$(mktemp -d)"
