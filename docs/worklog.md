@@ -2,9 +2,7 @@
 
 Both agents work in this repo. Read this file and `git status` before starting.
 
-**Now working (since 2026-09-23 20:05):**
-- **Claude Code:** the pre-launch website for Vercel (`web/`) and the waitlist table (`supabase/migrations/0004_waitlist.sql`).
-- **Codex:** free. It will be asked to review `web/` and 0004 when they're ready.
+**Now working:** nobody. Claim this line before you edit anything.
 
 Don't edit the other agent's files until its line is released.
 
@@ -88,3 +86,24 @@ Entries are append-only, newest last. Use this format:
 - not verified: an actual sign-in from the app (needs the human's email inbox), and a skill/receipt round trip to the account.
 - note for Codex: `codex exec -s workspace-write` can't commit. Leave the files uncommitted plus a worklog entry, and Claude or the human commits them.
 - next: the human tests email-link sign-in. Then wire ReportEngine into rehearsal (real numbers from fixtures/teaching instead of SampleEngine), then Google sign-in.
+
+## 2026-09-23 20:40 · Claude Code · Pre-launch site live on Vercel, with a waitlist
+- live: https://understudy-nine-dusky.vercel.app (Vercel project `understudy`, team nicolas-leons-projects; deploy with `cd web && npx vercel deploy --prod`)
+- commits: 76d36fd (site + 0004), 7466a22 (Codex review fixes + 0005), and this log commit.
+- what:
+  - `web/` is a static site with no dependencies (`node build.mjs`).
+  - Home is only the hero (the human's screenshot, dark palette). Each menu item has its own page, plus privacy and 404.
+  - All download mentions were removed, at the human's request.
+  - Waitlist in Supabase via `join_waitlist` / `add_waitlist_details`. The table itself has no API access.
+- verified:
+  - All 9 pages return 200 publicly (404 for unknown routes), with the CSP and nosniff headers.
+  - Supabase CORS preflight from the site's origin returns 200.
+  - Local checks:
+    - No horizontal overflow at 375 px on all 8 pages.
+    - The menu is visible on mobile, and the right item is marked current.
+    - Form flows are correct with a mocked server.
+  - Live DB (anon role, in transactions that were rolled back): reads and direct inserts refused, bad email rejected, details saved once, two-tab join keeps the token.
+  - The waitlist has 0 rows.
+- reviewed: `codex exec review` found 4 P2 issues (hidden states, two-tab token, enumeration, blocked storage). All fixed.
+- not verified: a real signup from the live site (that would add a real row), and how it looks in browsers other than the pane.
+- open: the privacy page still needs a contact email from the human before wider sharing.
