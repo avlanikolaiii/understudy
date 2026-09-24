@@ -107,3 +107,9 @@ Entries are append-only, newest last. Use this format:
 - reviewed: `codex exec review` found 4 P2 issues (hidden states, two-tab token, enumeration, blocked storage). All fixed.
 - not verified: a real signup from the live site (that would add a real row), and how it looks in browsers other than the pane.
 - open: the privacy page still needs a contact email from the human before wider sharing.
+
+## 2026-09-23 20:55 · Claude Code · App icon = the website's favicon mark
+- commits: the one that adds `app/Resources/AppIcon.icns`.
+- what: `app/scripts/make-icon.swift` draws the favicon (dark rounded square #101217, yellow dot #F4C534, same proportions) on Apple's 824/1024 icon grid. `iconutil` builds the .icns. `bundle.sh` copies it and sets `CFBundleIconFile`.
+- verified: the bundle builds and its signature verifies. `NSWorkspace.icon(forFile:)` returns the new icon, with macOS 26's glass treatment applied.
+- not verified: how the Dock and Finder look on screen (my screenshots of other apps are unreliable). The menu bar item still uses the theater-masks symbol.
