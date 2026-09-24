@@ -1,0 +1,107 @@
+{
+  "description": "Every screen, state, and action of Understudy. Node ids match what the QA suites report. 'suite' says which suite proves the node; 'manual' nodes need a server or a person and are reported as unverified, never as passing.",
+  "surfaces": [
+    {
+      "id": "mac",
+      "label": "Mac app",
+      "nodes": [
+        {"id": "page.Home", "label": "Home", "suite": "self-test"},
+        {"id": "teach.step1", "label": "Teach · Describe", "suite": "self-test"},
+        {"id": "teach.step2", "label": "Teach · Show (Watch)", "suite": "self-test"},
+        {"id": "teach.step3", "label": "Teach · Review", "suite": "self-test"},
+        {"id": "page.Skills", "label": "Skills", "suite": "self-test"},
+        {"id": "page.Receipts", "label": "Receipts", "suite": "self-test"},
+        {"id": "page.Account", "label": "Account", "suite": "self-test"},
+        {"id": "account.notConfigured", "label": "Account · no server", "suite": "self-test"},
+        {"id": "account.signedOut", "label": "Account · sign-in", "suite": "manual"},
+        {"id": "account.signedIn", "label": "Account · signed in", "suite": "manual"},
+        {"id": "window.main.open", "label": "Main window open", "suite": "self-test"},
+        {"id": "window.main.closed", "label": "Main window closed", "suite": "self-test"},
+        {"id": "window.settings", "label": "Shortcut settings", "suite": "self-test"},
+        {"id": "modal.export.write", "label": "Export · write + read back", "suite": "self-test"},
+        {"id": "notch.idle", "label": "Notch · idle", "suite": "self-test"},
+        {"id": "notch.watching", "label": "Notch · Watching", "suite": "self-test"},
+        {"id": "notch.stopped", "label": "Notch · Stopped", "suite": "self-test"},
+        {"id": "notch.learned", "label": "Notch · New skill", "suite": "self-test"},
+        {"id": "notch.rehearsing", "label": "Notch · Rehearsing", "suite": "self-test"},
+        {"id": "notch.receipt", "label": "Notch · Receipt", "suite": "self-test"},
+        {"id": "notch.demo", "label": "Notch · demo", "suite": "self-test"}
+      ],
+      "edges": [
+        {"action": "homeTeach", "from": "page.Home", "to": "teach.step1"},
+        {"action": "exploreSample", "from": "page.Home", "to": "page.Skills"},
+        {"action": "editDescribe", "from": "teach.step1", "to": "teach.step1"},
+        {"action": "startWatch", "from": "teach.step1", "to": "teach.step2"},
+        {"action": "startWatchHere", "from": "teach.step2", "to": "notch.watching"},
+        {"action": "tick", "from": "notch.watching", "to": "notch.watching"},
+        {"action": "addNote", "from": "teach.step2", "to": "teach.step2"},
+        {"action": "stopButton", "from": "notch.watching", "to": "notch.stopped"},
+        {"action": "replay", "from": "notch.stopped", "to": "notch.watching"},
+        {"action": "review", "from": "teach.step2", "to": "teach.step3"},
+        {"action": "backToDescribe", "from": "teach.step2", "to": "teach.step1"},
+        {"action": "backToShow", "from": "teach.step3", "to": "teach.step2"},
+        {"action": "saveSkill", "from": "teach.step3", "to": "notch.learned"},
+        {"action": "selectSkill", "from": "page.Skills", "to": "page.Skills"},
+        {"action": "pickCase", "from": "page.Skills", "to": "page.Skills"},
+        {"action": "rehearse", "from": "page.Skills", "to": "notch.rehearsing"},
+        {"action": "export", "from": "page.Receipts", "to": "modal.export.write"},
+        {"action": "tryAnotherCase", "from": "page.Receipts", "to": "page.Skills"},
+        {"action": "nav", "from": "window.main.open", "to": "page.Home"},
+        {"action": "toolbarTeach", "from": "window.main.open", "to": "teach.step1"},
+        {"action": "closeMain", "from": "window.main.open", "to": "window.main.closed"},
+        {"action": "menuOpen", "from": "window.main.closed", "to": "window.main.open"},
+        {"action": "menuTeach", "from": "window.main.closed", "to": "teach.step1"},
+        {"action": "settings", "from": "window.main.open", "to": "window.settings"},
+        {"action": "shortcut", "from": "notch.idle", "to": "notch.watching"},
+        {"action": "notchTap", "from": "notch.receipt", "to": "page.Receipts"},
+        {"action": "demo", "from": "notch.idle", "to": "notch.demo"},
+        {"action": "relaunch", "from": "window.main.closed", "to": "page.Skills"}
+      ]
+    },
+    {
+      "id": "web",
+      "label": "Website",
+      "nodes": [
+        {"id": "web.page.index", "label": "Home (hero)", "suite": "web-qa"},
+        {"id": "web.page.workflow", "label": "The workflow", "suite": "web-qa"},
+        {"id": "web.page.rehearsal", "label": "Rehearsal", "suite": "web-qa"},
+        {"id": "web.page.receipts", "label": "Receipts", "suite": "web-qa"},
+        {"id": "web.page.what-exists", "label": "What exists", "suite": "web-qa"},
+        {"id": "web.page.pricing", "label": "Pricing", "suite": "web-qa"},
+        {"id": "web.page.early-access", "label": "Early access", "suite": "web-qa"},
+        {"id": "web.page.privacy", "label": "Privacy", "suite": "web-qa"},
+        {"id": "web.page.404", "label": "Not found", "suite": "web-qa"},
+        {"id": "web.hero.joined", "label": "Hero · joined", "suite": "browser"},
+        {"id": "web.ea.details", "label": "Early access · details", "suite": "browser"},
+        {"id": "web.ea.done", "label": "Early access · saved", "suite": "browser"},
+        {"id": "web.demo.controls", "label": "Demo chips + pause", "suite": "browser"},
+        {"id": "web.menu.mobile", "label": "Menu on phones", "suite": "browser"}
+      ],
+      "edges": [
+        {"action": "heroJoin", "from": "web.page.index", "to": "web.hero.joined"},
+        {"action": "heroToDetails", "from": "web.hero.joined", "to": "web.ea.details"},
+        {"action": "eaJoin", "from": "web.page.early-access", "to": "web.ea.details"},
+        {"action": "eaSave", "from": "web.ea.details", "to": "web.ea.done"},
+        {"action": "demoChip", "from": "web.page.index", "to": "web.demo.controls"},
+        {"action": "menu", "from": "web.page.index", "to": "web.page.workflow"}
+      ]
+    },
+    {
+      "id": "backend",
+      "label": "Backend and engine",
+      "nodes": [
+        {"id": "db.waitlist.join", "label": "Waitlist · join", "suite": "db"},
+        {"id": "db.waitlist.details", "label": "Waitlist · details once", "suite": "db"},
+        {"id": "db.waitlist.private", "label": "Waitlist · unreadable", "suite": "db"},
+        {"id": "db.rls.anonDenied", "label": "Tables · no anonymous access", "suite": "db"},
+        {"id": "auth.email", "label": "Email sign-in", "suite": "manual"},
+        {"id": "engine.teaching", "label": "Report engine · teaching weeks", "suite": "checks"},
+        {"id": "engine.holdout", "label": "Report engine · held-out weeks", "suite": "eval"}
+      ],
+      "edges": [
+        {"action": "rpcJoin", "from": "db.waitlist.join", "to": "db.waitlist.details"},
+        {"action": "specToEngine", "from": "engine.teaching", "to": "engine.holdout"}
+      ]
+    }
+  ]
+}
