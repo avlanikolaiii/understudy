@@ -10,7 +10,7 @@ Standard library only. Run from the repository root on a Mac (the self-test need
 server). Writes qa/out/ (git-ignored): run.json, report.html, screenshots. Appends one summary
 line to qa/history.jsonl. Exits 1 if any automated suite fails.
 """
-import argparse, datetime, html, json, pathlib, subprocess, sys, time
+import argparse, datetime, hashlib, html, json, pathlib, subprocess, sys, time
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 OUT = ROOT / "qa" / "out"
@@ -89,10 +89,32 @@ def run_eval():
     return fresh_report(OUT / "eval-holdout.json", [str(binary), str(OUT / "eval-holdout.json")], suite="eval-holdout")
 
 
+# The sources each agent-run suite tests. A saved result counts only while these are unchanged.
+AGENT_SOURCES = {"browser": ["apps/web/src", "qa/browser-sessions.js"], "db": ["supabase/migrations", "qa/db-waitlist.sql"]}
+
+
+def fingerprint(name):
+    digest = hashlib.sha256()
+    for root in AGENT_SOURCES[name]:
+        path = ROOT / root
+        for f in sorted(path.rglob("*") if path.is_dir() else [path]):
+            if f.is_file():
+                digest.update(str(f.relative_to(ROOT)).encode() + b"\0" + f.read_bytes())
+    return digest.hexdigest()[:16]
+
+
 def agent_suite(name):
-    """Browser and database suites are run by an agent (see AGENTS.md) and saved into qa/out/."""
+    """Browser and database suites are run by an agent (see AGENTS.md) and saved into qa/out/
+    with the fingerprint printed by `qa/run.py --fingerprint NAME`. A result saved against
+    different sources is stale: it fails the gate until the suite is run again."""
     path = OUT / f"{name}.json"
-    return json.loads(path.read_text()) if path.exists() else None
+    if not path.exists():
+        return None
+    result = json.loads(path.read_text())
+    if result.get("fingerprint") != fingerprint(name):
+        return {"suite": name, "passed": 0, "total": 1, "stale": True, "passedNodes": [], "failedNodes": [],
+                "error": "stale: its sources changed since it ran; run it again"}
+    return result
 
 
 def coverage(flows, suites):
@@ -252,7 +274,10 @@ def main():
     parser.add_argument("--quick", action="store_true")
     parser.add_argument("--skip-build", action="store_true")
     parser.add_argument("--only", default="", help="comma list: checks,self-test,web-qa,eval-holdout")
+    parser.add_argument("--fingerprint", choices=sorted(AGENT_SOURCES), help="print the fingerprint to save with an agent-run suite")
     args = parser.parse_args()
+    if args.fingerprint:
+        print(fingerprint(args.fingerprint)); return
     sessions, seeds = (40, [1]) if args.quick else (args.sessions, [int(s) for s in args.seeds.split(",")])
     OUT.mkdir(parents=True, exist_ok=True)
 
