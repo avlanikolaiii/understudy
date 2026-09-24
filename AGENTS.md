@@ -62,7 +62,7 @@ Continuous integration builds the app once (macos-15, Swift 6.1), runs the check
 - **Agent-run suites:**
   - `qa/browser-sessions.js`: simulated visitors against a fake Supabase.
   - `qa/db-waitlist.sql`: a mass waitlist test, rolled back.
-  - Save their JSON to `qa/out/browser.json` and `qa/out/db.json`.
+  - Save their JSON to `qa/out/browser.json` and `qa/out/db.json`, with `"fingerprint"` from `python3 qa/run.py --fingerprint browser|db`. A result whose sources changed since it ran is stale and fails the gate.
 - **Output:** `qa/out/report.html` shows a coverage graph of every flow node, the trend across runs (`qa/history.jsonl`), actions taken, and eval scores.
 
 **A finding counts only if all three hold:** it reproduces twice from its seed or steps; it points to a line of code; and it breaks documented behavior, not taste. Screenshot or timing artifacts are verified against the real screen before anything is called a bug.
