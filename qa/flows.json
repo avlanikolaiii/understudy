@@ -58,6 +58,8 @@
         {"action": "seeRunReceipt", "from": "page.Skills", "to": "run.receipt"},
         {"action": "backToSkills", "from": "run.receipt", "to": "page.Skills"},
         {"action": "editTrigger", "from": "page.Skills", "to": "trigger.set"},
+        {"action": "editSkill", "from": "page.Skills", "to": "page.Skills"},
+        {"action": "deleteSkill", "from": "page.Skills", "to": "page.Skills"},
         {"action": "triggerFires", "from": "trigger.set", "to": "trigger.countdown"},
         {"action": "saveSkill", "from": "teach.step3", "to": "notch.learned"},
         {"action": "selectSkill", "from": "page.Skills", "to": "page.Skills"},

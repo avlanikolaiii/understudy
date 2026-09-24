@@ -143,7 +143,8 @@ struct MainWindowView: View {
                 } else {
                     Text("Understudy replays these steps exactly as you did them, without the mouse. Delete anything you don't want, like switching back to Understudy.")
                         .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-                    StepListView(steps: ui.draftSteps, edits: ui)
+                    StepListView(steps: ui.draftSteps, edits: StepEdits(delete: ui.deleteStep, moveUp: ui.moveStepUp,
+                                                                        retype: { ui.setTypedText($0, at: $1) }))
                 }
                 detail("YOUR NOTES", ui.rules.isEmpty ? "No additional notes." : ui.rules)
                 HStack {
@@ -177,13 +178,35 @@ struct MainWindowView: View {
                 }.buttonStyle(.plain)
             }
             Divider()
-            if !activeSkill.definition.steps.isEmpty {
+            if !activeSkill.isSample {
+                HStack {
+                    Text(activeSkill.name).font(.system(size: 20, weight: .semibold))
+                    Spacer()
+                    if ui.editing != activeSkill.id {
+                        Button { ui.beginEdit(activeSkill) } label: { Label("Edit", systemImage: "pencil") }
+                        Button(role: .destructive) { confirmDelete(activeSkill) } label: { Label("Delete", systemImage: "trash") }
+                            .disabled(runner.isRunning && runner.skill?.id == activeSkill.id)
+                    }
+                }
+            }
+            if ui.editing == activeSkill.id {
+                editForm(activeSkill)
+            } else if !activeSkill.definition.steps.isEmpty {
                 RunPanelView(runner: runner, skill: activeSkill, openReceipts: { ui.selectedReceipt = runner.lastReceipt; ui.page = .results })
                 TriggerEditorView(ui: ui, scheduler: scheduler, skill: activeSkill) { trigger in
                     ui.saveTrigger(trigger, of: activeSkill, library: library)
                 }
                 Text("Steps").font(.system(size: 17, weight: .semibold))
                 StepListView(steps: activeSkill.definition.steps)
+                if let latest = watch.latestRecording(), latest.id != activeSkill.definition.recording {
+                    HStack {
+                        Button("Use latest recording (\(latest.startedAt.formatted(date: .omitted, time: .shortened)))") {
+                            ui.addStepsFromLatestRecording(to: activeSkill, library: library, watch: watch)
+                        }
+                        Text("Replaces these steps with your newest take. Notes and schedule stay.")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                }
             } else if !activeSkill.isSample {
                 Text("\(activeSkill.name) has no steps yet").font(.system(size: 20, weight: .semibold))
                 Text("It was saved before Understudy could turn recordings into steps. Use your latest recording, or teach it again.")
@@ -193,6 +216,43 @@ struct MainWindowView: View {
                 }.disabled(watch.latestRecording() == nil)
             }
             if activeSkill.definition.steps.isEmpty { rehearsal }
+        }
+    }
+
+    /// Edit skill: name, client, notes, and the steps. Its schedule is set under When it runs.
+    private func editForm(_ skill: Skill) -> some View {
+        VStack(alignment: .leading, spacing: 14) {
+            field("Skill name", text: $ui.editName)
+            field("Client or project", text: $ui.editClient)
+            Text("Notes").font(.system(size: 13, weight: .semibold))
+            TextEditor(text: $ui.editNotes).font(.body).frame(height: 80).padding(8)
+                .background(Color(nsColor: .textBackgroundColor), in: RoundedRectangle(cornerRadius: 8))
+                .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color(nsColor: .separatorColor)))
+                .accessibilityLabel("Skill notes")
+            if !ui.editSteps.isEmpty {
+                Text("Steps").font(.system(size: 13, weight: .semibold))
+                StepListView(steps: ui.editSteps, edits: StepEdits(
+                    delete: { WorkspaceState.deleteStep(at: $0, in: &ui.editSteps) },
+                    moveUp: { WorkspaceState.moveStepUp(at: $0, in: &ui.editSteps) },
+                    retype: { WorkspaceState.setTypedText($0, at: $1, in: &ui.editSteps) }))
+            }
+            HStack {
+                Button("Cancel") { ui.cancelEdit() }
+                primary("Save changes", symbol: "checkmark") { ui.saveEdit(of: skill, library: library) }
+                    .disabled(!ui.canSaveEdit)
+            }
+        }
+    }
+
+    /// Asks before deleting; receipts of past runs stay.
+    private func confirmDelete(_ skill: Skill) {
+        let alert = NSAlert()
+        alert.messageText = "Delete “\(skill.name)”?"
+        alert.informativeText = "Its steps and schedule are deleted. Receipts of past runs stay."
+        alert.addButton(withTitle: "Delete").hasDestructiveAction = true
+        alert.addButton(withTitle: "Cancel")
+        if alert.runModal() == .alertFirstButtonReturn {
+            ui.deleteSkill(skill, library: library, runner: runner)
         }
     }
 

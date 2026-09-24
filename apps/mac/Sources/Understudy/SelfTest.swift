@@ -332,6 +332,12 @@ final class SelfTest {
                 let active = ui.activeSkill(in: library)
                 let runner = app.env.runner
                 onScreen.append(("selectSkill", { ui.selectedSkill = self.rng.pick(library.skills) }))
+                if !active.isSample && ui.editing == nil {
+                    onScreen.append(("editSkill", { await self.editSkill(active) }))
+                    if !(runner.isRunning && runner.skill?.id == active.id) {
+                        onScreen.append(("deleteSkill", { await self.deleteSkill(active) }))
+                    }
+                }
                 if !active.definition.steps.isEmpty {
                     // The run panel: Run now, Test step by step, then Stop, Approve, and Skip while it runs.
                     if !runner.isRunning {
@@ -493,6 +499,31 @@ final class SelfTest {
                 expect(ui.draftSteps == before, "steps.retypeOnlyTyping", "only Type steps have text to edit")
             }
         }
+    }
+
+    /// Edit: rename it, drop a step, save. Its schedule and recording link stay.
+    private func editSkill(_ skill: Skill) async {
+        let ui = app.env.ui
+        ui.beginEdit(skill)
+        ui.editName = rng.pick(names)
+        if !ui.editSteps.isEmpty && rng.chance(50) { WorkspaceState.deleteStep(at: 0, in: &ui.editSteps) }
+        let expected = ui.edited(skill)
+        guard ui.canSaveEdit else { ui.cancelEdit(); return }   // Save is disabled without a name and client
+        ui.saveEdit(of: skill, library: app.env.library)
+        await pump(20)
+        let saved = app.env.library.skills.first { $0.id == skill.id }
+        expect(saved?.name == expected.name && saved?.definition.steps == expected.definition.steps
+               && saved?.definition.trigger == skill.definition.trigger && ui.editing == nil,
+               "skill.edit", "Save changes keeps exactly the edits, and the schedule")
+    }
+
+    private func deleteSkill(_ skill: Skill) async {
+        let library = app.env.library
+        let receipts = library.receipts.count
+        app.env.ui.deleteSkill(skill, library: library, runner: app.env.runner)
+        await pump(20)
+        expect(!library.skills.contains { $0.id == skill.id } && library.receipts.count == receipts && !library.skills.isEmpty,
+               "skill.delete", "Delete removes the skill and keeps its receipts")
     }
 
     /// Choose when a skill runs, as the editor allows, and save it.

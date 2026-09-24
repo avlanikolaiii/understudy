@@ -56,23 +56,59 @@ final class WorkspaceState: ObservableObject {
         page = .teach
     }
 
-    // MARK: Editing the reviewed steps
+    // MARK: Editing steps (the Teach review and Edit skill)
 
-    func deleteStep(at index: Int) {
-        guard draftSteps.indices.contains(index) else { return }
-        draftSteps.remove(at: index)
+    static func deleteStep(at index: Int, in steps: inout [SkillDefinition.Step]) {
+        guard steps.indices.contains(index) else { return }
+        steps.remove(at: index)
     }
 
-    func moveStepUp(at index: Int) {
-        guard index > 0, draftSteps.indices.contains(index) else { return }
-        draftSteps.swapAt(index, index - 1)
+    static func moveStepUp(at index: Int, in steps: inout [SkillDefinition.Step]) {
+        guard index > 0, steps.indices.contains(index) else { return }
+        steps.swapAt(index, index - 1)
     }
 
     /// Changes what a "Type" step types.
-    func setTypedText(_ text: String, at index: Int) {
-        guard draftSteps.indices.contains(index), draftSteps[index].parameters["action"] == "type" else { return }
-        draftSteps[index].parameters["text"] = text
-        draftSteps[index].intent = "Type \(RecordedAction.quote(text))"
+    static func setTypedText(_ text: String, at index: Int, in steps: inout [SkillDefinition.Step]) {
+        guard steps.indices.contains(index), steps[index].parameters["action"] == "type" else { return }
+        steps[index].parameters["text"] = text
+        steps[index].intent = "Type \(RecordedAction.quote(text))"
+    }
+
+    func deleteStep(at index: Int) { Self.deleteStep(at: index, in: &draftSteps) }
+    func moveStepUp(at index: Int) { Self.moveStepUp(at: index, in: &draftSteps) }
+    func setTypedText(_ text: String, at index: Int) { Self.setTypedText(text, at: index, in: &draftSteps) }
+
+    // MARK: Edit skill
+
+    /// The skill being edited on the Skills page, and its unsaved changes.
+    @Published private(set) var editing: UUID?
+    @Published var editName = ""
+    @Published var editClient = ""
+    @Published var editNotes = ""
+    @Published var editSteps: [SkillDefinition.Step] = []
+
+    func beginEdit(_ skill: Skill) {
+        editing = skill.id
+        editName = skill.name; editClient = skill.client
+        editNotes = skill.rules; editSteps = skill.definition.steps
+    }
+
+    func cancelEdit() { editing = nil }
+
+    var canSaveEdit: Bool {
+        !editName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && !editClient.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    /// The skill with the edits applied. Its schedule and recording link stay as they were.
+    func edited(_ skill: Skill) -> Skill {
+        var updated = skill
+        updated.name = editName.trimmingCharacters(in: .whitespacesAndNewlines)
+        updated.client = editClient.trimmingCharacters(in: .whitespacesAndNewlines)
+        updated.definition.rules = SkillDefinition.Rule.lines(editNotes)
+        updated.definition.steps = editSteps
+        return updated
     }
 
     // MARK: When a skill runs

@@ -25,6 +25,21 @@ extension WorkspaceState {
         watch.dismiss(); clearDraft(); teachingStep = 0; page = .skills
     }
 
+    /// "Save" in Edit skill.
+    func saveEdit(of skill: Skill, library: SkillLibrary) {
+        guard canSaveEdit, editing == skill.id else { return }
+        library.update(edited(skill)) { [weak self] saved in self?.selectedSkill = saved }
+        cancelEdit()
+    }
+
+    /// "Delete" on the Skills page, after the person confirms. Not while it runs.
+    func deleteSkill(_ skill: Skill, library: SkillLibrary, runner: RunController) {
+        guard !(runner.isRunning && runner.skill?.id == skill.id) else { return }
+        library.delete(skill)
+        if selectedSkill?.id == skill.id { selectedSkill = nil }
+        if editing == skill.id { cancelEdit() }
+    }
+
     /// "Save" under When it runs.
     func saveTrigger(_ trigger: SkillDefinition.Trigger, of skill: Skill, library: SkillLibrary) {
         var updated = skill
@@ -36,11 +51,14 @@ extension WorkspaceState {
     }
 
     /// "Create steps from latest recording" on the Skills page, for a skill saved without steps.
+    /// Also "Use latest recording" for a skill that has steps: a new take replaces its steps,
+    /// keeping its notes and when it runs.
     func addStepsFromLatestRecording(to skill: Skill, library: SkillLibrary, watch: WatchSession) {
-        guard !skill.isSample, skill.definition.steps.isEmpty, let recording = watch.latestRecording() else { return }
+        guard !skill.isSample, let recording = watch.latestRecording(), recording.id != skill.definition.recording else { return }
         var updated = skill
-        updated.definition = SkillDefinition(steps: StepsFromRecording.steps(from: recording),
-                                             rules: skill.definition.rules, recording: recording.id)
+        updated.definition.steps = StepsFromRecording.steps(from: recording)
+        updated.definition.recording = recording.id
+        updated.definition.simulated = false
         library.update(updated) { [weak self] saved in self?.selectedSkill = saved }
     }
 

@@ -1,11 +1,18 @@
 import SwiftUI
 import UnderstudyCore
 
+/// How a list of steps is edited: delete, move up, retype (by index).
+struct StepEdits {
+    let delete: (Int) -> Void
+    let moveUp: (Int) -> Void
+    let retype: (String, Int) -> Void
+}
+
 /// A skill's steps: what each does, in which app, how it runs, and what needs the person.
 /// With `edits`, each step can be deleted, moved up, or (for typing) changed.
 struct StepListView: View {
     let steps: [SkillDefinition.Step]
-    var edits: WorkspaceState?
+    var edits: StepEdits?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -28,17 +35,17 @@ struct StepListView: View {
                         }
                         if let edits, step.parameters["action"] == "type" {
                             TextField("Text to type", text: Binding(get: { step.parameters["text"] ?? "" },
-                                                                   set: { edits.setTypedText($0, at: index) }))
+                                                                   set: { edits.retype($0, index) }))
                                 .textFieldStyle(.roundedBorder).font(.caption).frame(maxWidth: 320)
                                 .accessibilityLabel("Text for step \(index + 1)")
                         }
                     }
                     Spacer()
                     if let edits {
-                        Button { edits.moveStepUp(at: index) } label: { Image(systemName: "arrow.up") }
+                        Button { edits.moveUp(index) } label: { Image(systemName: "arrow.up") }
                             .buttonStyle(.borderless).disabled(index == 0).help("Move up")
                             .accessibilityLabel("Move step \(index + 1) up")
-                        Button(role: .destructive) { edits.deleteStep(at: index) } label: { Image(systemName: "trash") }
+                        Button(role: .destructive) { edits.delete(index) } label: { Image(systemName: "trash") }
                             .buttonStyle(.borderless).help("Delete step")
                             .accessibilityLabel("Delete step \(index + 1)")
                     }

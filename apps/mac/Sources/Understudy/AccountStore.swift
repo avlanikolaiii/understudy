@@ -37,11 +37,17 @@ struct AccountStore {
         return row.skill
     }
 
-    /// Replaces a saved skill's definition (its steps, notes, and recording link).
+    /// Replaces a saved skill's name, client, and definition (its steps, notes, trigger, recording link).
     func update(_ skill: Skill) async throws -> Skill {
-        let row: SkillRow = try await client.from("skills").update(DefinitionRow(definition: skill.definition))
+        let row: SkillRow = try await client.from("skills")
+            .update(SkillChangeRow(name: skill.name, client: skill.client, definition: skill.definition))
             .eq("id", value: skill.id).select(SkillRow.columns).single().execute().value
         return row.skill
+    }
+
+    /// Deletes a skill. Its receipts stay, with the skill's name (see migration 0002).
+    func delete(_ skill: Skill) async throws {
+        try await client.from("skills").delete().eq("id", value: skill.id).execute()
     }
 
     func save(_ receipt: Receipt, skill: Skill) async throws {
@@ -75,7 +81,9 @@ private struct NewSkillRow: Encodable {
     }
 }
 
-private struct DefinitionRow: Encodable {
+private struct SkillChangeRow: Encodable {
+    let name: String
+    let client: String
     let definition: SkillDefinition
 }
 
