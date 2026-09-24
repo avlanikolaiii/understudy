@@ -32,7 +32,6 @@
         {"action": "exploreSample", "from": "page.Home", "to": "page.Skills"},
         {"action": "editDescribe", "from": "teach.step1", "to": "teach.step1"},
         {"action": "startWatch", "from": "teach.step1", "to": "teach.step2"},
-        {"action": "startWatchHere", "from": "teach.step2", "to": "notch.watching"},
         {"action": "tick", "from": "notch.watching", "to": "notch.watching"},
         {"action": "addNote", "from": "teach.step2", "to": "teach.step2"},
         {"action": "stopButton", "from": "notch.watching", "to": "notch.stopped"},

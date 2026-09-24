@@ -290,7 +290,6 @@ final class SelfTest {
                     onScreen.append(("replay", { watch.start(keepingRules: true) }))
                     onScreen.append(("review", { self.review() }))
                 }
-                if !watch.isPresented { onScreen.append(("startWatchHere", { watch.start() })) }
             case .teach:
                 onScreen.append(("backToShow", { ui.teachingStep = 1 }))
                 if ui.canSaveSkill { onScreen.append(("saveSkill", { await self.save() })) }
