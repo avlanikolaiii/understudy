@@ -23,6 +23,7 @@ CORE_FLAGS = ["-parse-as-library", "-I", str(CORE_OUT), "-L", str(CORE_OUT), "-l
 CHECKS = {  # name: (extra swiftc flags, app sources, test)
     "report":    ([], [], "ReportChecks"),
     "definition": ([], [], "SkillDefinitionChecks"),
+    "steps":     ([], [], "StepsChecks"),
     "library":   ([], ["Library"], "PrototypeChecks"),
     "watch":     ([], ["WatchSession"], "WatchChecks"),
     "workspace": ([], ["Library", "WatchSession", "WorkspaceState"], "WorkspaceChecks"),

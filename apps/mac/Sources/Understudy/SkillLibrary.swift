@@ -83,6 +83,33 @@ final class SkillLibrary: ObservableObject {
         }
     }
 
+    /// Replaces a saved skill (e.g. steps added from a recording). The sample skill never changes.
+    func update(_ skill: Skill, done: @escaping (Skill) -> Void = { _ in }) {
+        guard !skill.isSample, skills.contains(where: { $0.id == skill.id }) else { return }
+        switch mode {
+        case .sample:
+            guard let stored = local.skills.firstIndex(where: { $0.id == skill.id }) else { return }
+            local.skills[stored] = skill
+            persistLocal()
+            showLocal()
+            done(skill)
+        case .account:
+            guard let account else { return }
+            let started = owner
+            Task {
+                do {
+                    let saved = try await account.update(skill)
+                    guard started == owner, let current = skills.firstIndex(where: { $0.id == saved.id }) else { return }
+                    skills[current] = saved
+                    done(saved)
+                } catch {
+                    guard started == owner else { return }
+                    notice = "The skill wasn't updated in your account: \(Self.describe(error))"
+                }
+            }
+        }
+    }
+
     /// Returns a recorder bound to whoever is signed in now. If the user signs in or out
     /// before the rehearsal finishes, its receipt is shown but not saved anywhere.
     func recorder(for skill: Skill) -> (Receipt) -> Receipt {

@@ -129,17 +129,24 @@ struct MainWindowView: View {
                 WorkspaceWatchView(session: watch, onReview: { ui.reviewWatch(watch) })
                 Button("Back to description") { ui.teachingStep = 0 }
             } else {
-                badge("SAMPLE PROCEDURE · NOT LEARNED FROM YOUR RECORDING YET")
+                badge(ui.draftSteps.isEmpty ? "NO STEPS RECORDED · NOTES ONLY" : "YOUR STEPS · FROM YOUR RECORDING")
                 field("Skill name", text: $ui.skillName)
                 field("Client or project", text: $ui.clientName)
-                detail("PROCEDURE", "Read sample figures → fill the report → flag missing data → wait for review")
                 if let recording = watch.recording {
                     detail("YOUR RECORDING", "\(recording.actions.count) actions over \(Int(recording.duration.rounded())) seconds\(recording.video == nil ? "" : ", with screen video"). Saved on this Mac.")
+                }
+                if ui.draftSteps.isEmpty {
+                    Text("Nothing was recorded to replay. Record again, or save the notes on their own.")
+                        .font(.callout).foregroundStyle(.secondary)
+                } else {
+                    Text("Understudy replays these steps exactly as you did them, without the mouse. Delete anything you don't want, like switching back to Understudy.")
+                        .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                    StepListView(steps: ui.draftSteps, edits: ui)
                 }
                 detail("YOUR NOTES", ui.rules.isEmpty ? "No additional notes." : ui.rules)
                 HStack {
                     Button("Back") { ui.teachingStep = 1 }
-                    primary("Save sample skill", symbol: "checkmark") {
+                    primary("Save skill", symbol: "checkmark") {
                         ui.saveReviewedSkill(library: library, watch: watch, activity: activity)
                     }
                     .disabled(!ui.canSaveSkill)
@@ -159,7 +166,8 @@ struct MainWindowView: View {
                             Text(skill.name).font(.system(size: 15, weight: .semibold))
                             Text(skill.client).font(.system(size: 12)).foregroundStyle(Color.secondary)
                         }
-                        Spacer(); Text(skill.isSample ? "Sample" : "Simulated").font(.caption).foregroundStyle(.secondary)
+                        Spacer(); Text(skill.isSample ? "Sample" : skill.definition.steps.isEmpty ? "No steps yet" : "\(skill.definition.steps.count) steps")
+                            .font(.caption).foregroundStyle(.secondary)
                         if activeSkill.id == skill.id { Image(systemName: "checkmark.circle.fill").foregroundStyle(Color.accentColor) }
                     }.padding(18).background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 12))
                         .overlay(RoundedRectangle(cornerRadius: 12).stroke(activeSkill.id == skill.id ? Color.accentColor.opacity(0.6) : Color(nsColor: .separatorColor)))
@@ -167,6 +175,24 @@ struct MainWindowView: View {
                 }.buttonStyle(.plain)
             }
             Divider()
+            if !activeSkill.definition.steps.isEmpty {
+                Text("Steps of \(activeSkill.name)").font(.system(size: 20, weight: .semibold))
+                StepListView(steps: activeSkill.definition.steps)
+            } else if !activeSkill.isSample {
+                Text("\(activeSkill.name) has no steps yet").font(.system(size: 20, weight: .semibold))
+                Text("It was saved before Understudy could turn recordings into steps. Use your latest recording, or teach it again.")
+                    .font(.system(size: 13)).foregroundStyle(Color.secondary)
+                primary("Create steps from latest recording", symbol: "wand.and.stars") {
+                    ui.addStepsFromLatestRecording(to: activeSkill, library: library, watch: watch)
+                }.disabled(watch.latestRecording() == nil)
+            }
+            if activeSkill.definition.steps.isEmpty { rehearsal }
+        }
+    }
+
+    /// The sample rehearsal, for skills without recorded steps.
+    private var rehearsal: some View {
+        VStack(alignment: .leading, spacing: 22) {
             Text("Rehearse \(activeSkill.name)").font(.system(size: 20, weight: .semibold))
             Text("Watch it rehearse in the notch. It uses fixed sample inputs, doesn't test AI learning, and doesn't connect to your accounts.")
                 .font(.system(size: 13)).foregroundStyle(Color.secondary)

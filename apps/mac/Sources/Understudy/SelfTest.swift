@@ -138,6 +138,8 @@ final class SelfTest {
         await pump(settle)
         snapshot(notchWindow, name: "notch-learned")
         await waitUntil(6) { self.app.env.activity.mode == .idle }
+        // The sample rehearsal is offered for skills without recorded steps, like the sample.
+        app.env.ui.selectedSkill = app.env.library.skills.first { $0.isSample }
         app.env.ui.scenario = .missing
         app.env.ui.rehearseActiveSkill(library: app.env.library, activity: app.env.activity)
         await pump(settle)
@@ -316,11 +318,20 @@ final class SelfTest {
             case .teach:
                 onScreen.append(("backToShow", { ui.teachingStep = 1 }))
                 if ui.canSaveSkill { onScreen.append(("saveSkill", { await self.save() })) }
+                // Each reviewed step has Move up, Delete, and (for typing) a text field.
+                if !ui.draftSteps.isEmpty { onScreen.append(("editStep", { self.editStep() })) }
             case .skills:
+                let active = ui.activeSkill(in: library)
                 onScreen.append(("selectSkill", { ui.selectedSkill = self.rng.pick(library.skills) }))
-                onScreen.append(("pickCase", { ui.scenario = self.rng.pick(SampleCase.allCases) }))
-                // "Rehearse sample" is disabled while a rehearsal runs.
-                if !activity.isRehearsing && library.canRehearse { onScreen.append(("rehearse", { await self.rehearse() })) }
+                if active.definition.steps.isEmpty {
+                    // The sample rehearsal shows only for skills without recorded steps.
+                    onScreen.append(("pickCase", { ui.scenario = self.rng.pick(SampleCase.allCases) }))
+                    // "Rehearse sample" is disabled while a rehearsal runs.
+                    if !activity.isRehearsing && library.canRehearse { onScreen.append(("rehearse", { await self.rehearse() })) }
+                    if !active.isSample && watch.latestRecording() != nil {
+                        onScreen.append(("createSteps", { await self.createSteps(for: active) }))
+                    }
+                }
             case .results:
                 if !library.receipts.isEmpty {
                     onScreen.append(("export", { self.export() }))
@@ -405,12 +416,48 @@ final class SelfTest {
     private func save() async {
         let before = app.env.library.skills.count
         let name = app.env.ui.skillName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let steps = app.env.ui.draftSteps
         app.env.ui.saveReviewedSkill(library: app.env.library, watch: app.env.watch, activity: app.env.activity)
         await pump(20)
         expect(app.env.library.skills.count == before + 1, "save.addsOneSkill", "saving must add exactly one skill")
         expect(app.env.library.skills.last?.name == name, "save.trimsName", "the saved name must be the trimmed name")
+        expect(app.env.library.skills.last?.definition.steps == steps && app.env.ui.draftSteps.isEmpty, "save.keepsReviewedSteps",
+               "the saved skill must have exactly the reviewed steps")
         expect(app.env.ui.page == .skills && !app.env.watch.isPresented, "save.opensSkills", "saving must end Watch and open Skills")
         expect(app.env.activity.mode == .learned, "save.showsNewSkill", "the notch must show New skill after saving")
+    }
+
+    /// Delete, move up, or retype one reviewed step.
+    private func editStep() {
+        let ui = app.env.ui
+        let before = ui.draftSteps
+        let index = rng.int(0...(before.count - 1))
+        switch rng.int(0...2) {
+        case 0:
+            ui.deleteStep(at: index)
+            expect(ui.draftSteps.count == before.count - 1 && !ui.draftSteps.contains { $0.id == before[index].id },
+                   "steps.delete", "Delete removes exactly that step")
+        case 1:
+            ui.moveStepUp(at: index)
+            expect(Set(ui.draftSteps.map(\.id)) == Set(before.map(\.id)) && (index == 0 || ui.draftSteps[index - 1].id == before[index].id),
+                   "steps.moveUp", "Move up swaps a step with the one above and loses nothing")
+        default:
+            let text = rng.pick(notes)
+            ui.setTypedText(text, at: index)
+            if before[index].parameters["action"] == "type" {
+                expect(ui.draftSteps[index].parameters["text"] == text, "steps.retype", "editing a Type step changes what it types")
+            } else {
+                expect(ui.draftSteps == before, "steps.retypeOnlyTyping", "only Type steps have text to edit")
+            }
+        }
+    }
+
+    private func createSteps(for skill: Skill) async {
+        app.env.ui.addStepsFromLatestRecording(to: skill, library: app.env.library, watch: app.env.watch)
+        await pump(20)
+        let updated = app.env.library.skills.first { $0.id == skill.id }
+        expect(updated?.definition.steps.isEmpty == false && updated?.definition.recording != nil, "steps.fromLatestRecording",
+               "a skill without steps gets steps from the latest recording")
     }
 
     private func rehearse() async {
@@ -473,6 +520,8 @@ final class SelfTest {
         case .idle: break
         case .watching, .stopped:
             expect(activity.footer == NotchActivity.watchFooter, "notch.honestLabel", "Watch must say it records on this Mac, never passwords")
+        case .learned where activity.footer == NotchActivity.learnedFooter:
+            break   // a skill whose steps came from a recording
         default:
             expect(activity.footer.contains("Simulated") || activity.footer.contains("Concept demonstration"),
                    "notch.honestLabel", "every simulated notch state must say Simulated or Concept demonstration")

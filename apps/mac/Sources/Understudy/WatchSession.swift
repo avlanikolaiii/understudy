@@ -207,6 +207,12 @@ final class WatchSession: ObservableObject {
         try encoder.encode(recording).write(to: folder.appendingPathComponent("recording.json"), options: .atomic)
     }
 
+    /// The newest recording on this Mac with at least one action.
+    func latestRecording() -> Recording? {
+        let folders = (try? FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil)) ?? []
+        return folders.compactMap(Self.load).filter { !$0.actions.isEmpty }.max { $0.startedAt < $1.startedAt }
+    }
+
     static func load(_ folder: URL) -> Recording? {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601

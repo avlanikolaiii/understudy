@@ -1,5 +1,6 @@
 import Combine
 import Foundation
+import UnderstudyCore
 
 enum PrototypePage: String, CaseIterable {
     case home = "Home", teach = "Teach a skill", skills = "Skills", results = "Receipts", account = "Account"
@@ -23,6 +24,10 @@ final class WorkspaceState: ObservableObject {
     @Published var selectedSkill: Skill?
     @Published var scenario: SampleCase = .complete
     @Published var selectedReceipt: UUID?
+    /// The steps being reviewed, made from the latest recording. Edits here are saved with the skill.
+    @Published var draftSteps: [SkillDefinition.Step] = []
+    /// The recording `draftSteps` came from.
+    private(set) var draftRecording: UUID?
 
     func showTeaching(watch: WatchSession) {
         page = .teach
@@ -42,7 +47,36 @@ final class WorkspaceState: ObservableObject {
         var notes = rules.components(separatedBy: .newlines)
         for rule in watch.rules where !notes.contains(rule) { notes.append(rule) }
         rules = notes.filter { !$0.isEmpty }.joined(separator: "\n")
+        // Make steps from a new recording; reviewing the same one again keeps the edits.
+        if let recording = watch.recording, recording.id != draftRecording {
+            draftSteps = StepsFromRecording.steps(from: recording)
+            draftRecording = recording.id
+        }
         teachingStep = 2
         page = .teach
+    }
+
+    // MARK: Editing the reviewed steps
+
+    func deleteStep(at index: Int) {
+        guard draftSteps.indices.contains(index) else { return }
+        draftSteps.remove(at: index)
+    }
+
+    func moveStepUp(at index: Int) {
+        guard index > 0, draftSteps.indices.contains(index) else { return }
+        draftSteps.swapAt(index, index - 1)
+    }
+
+    /// Changes what a "Type" step types.
+    func setTypedText(_ text: String, at index: Int) {
+        guard draftSteps.indices.contains(index), draftSteps[index].parameters["action"] == "type" else { return }
+        draftSteps[index].parameters["text"] = text
+        draftSteps[index].intent = "Type \(RecordedAction.quote(text))"
+    }
+
+    func clearDraft() {
+        draftSteps = []
+        draftRecording = nil
     }
 }

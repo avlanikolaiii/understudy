@@ -88,11 +88,11 @@ public struct RecordedAction: Codable, Equatable, Sendable {
     }
 
     /// "D5=1200 E5=48" → "D5, E5".
-    static func addresses(_ cells: String) -> String {
+    public static func addresses(_ cells: String) -> String {
         cells.split(separator: " ").map { $0.split(separator: "=").first.map(String.init) ?? String($0) }.joined(separator: ", ")
     }
 
-    static func quote(_ text: String, limit: Int = 32) -> String {
+    public static func quote(_ text: String, limit: Int = 32) -> String {
         let flat = text.replacingOccurrences(of: "\n", with: " ")
         return "“" + (flat.count > limit ? String(flat.prefix(limit)) + "…" : flat) + "”"
     }

@@ -37,6 +37,13 @@ struct AccountStore {
         return row.skill
     }
 
+    /// Replaces a saved skill's definition (its steps, notes, and recording link).
+    func update(_ skill: Skill) async throws -> Skill {
+        let row: SkillRow = try await client.from("skills").update(DefinitionRow(definition: skill.definition))
+            .eq("id", value: skill.id).select(SkillRow.columns).single().execute().value
+        return row.skill
+    }
+
     func save(_ receipt: Receipt, skill: Skill) async throws {
         try await client.from("receipts").insert(NewReceiptRow(receipt, skill: skill)).execute()
     }
@@ -66,6 +73,10 @@ private struct NewSkillRow: Encodable {
     init(_ skill: Skill) {
         name = skill.name; client = skill.client; is_sample = skill.isSample; definition = skill.definition
     }
+}
+
+private struct DefinitionRow: Encodable {
+    let definition: SkillDefinition
 }
 
 private struct ProfileRow: Decodable {

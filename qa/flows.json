@@ -43,6 +43,8 @@
         {"action": "review", "from": "teach.step2", "to": "teach.step3"},
         {"action": "backToDescribe", "from": "teach.step2", "to": "teach.step1"},
         {"action": "backToShow", "from": "teach.step3", "to": "teach.step2"},
+        {"action": "editStep", "from": "teach.step3", "to": "teach.step3"},
+        {"action": "createSteps", "from": "page.Skills", "to": "page.Skills"},
         {"action": "saveSkill", "from": "teach.step3", "to": "notch.learned"},
         {"action": "selectSkill", "from": "page.Skills", "to": "page.Skills"},
         {"action": "pickCase", "from": "page.Skills", "to": "page.Skills"},

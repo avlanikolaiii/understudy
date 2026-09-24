@@ -1,0 +1,63 @@
+import Foundation
+import UnderstudyCore
+
+@main
+struct StepsChecks {
+    static func main() {
+        typealias A = RecordedAction
+        // The shape of a real take: Dock click, the switch it caused, shortcuts typed as letters,
+        // ⌘K, text in a field, Return, then another app.
+        let take = Recording(id: UUID(), startedAt: Date(), duration: 30, actions: [
+            A(t: 4.6, kind: .click, app: "Dock", bundle: "com.apple.dock", element: .init(role: "AXDockItem", title: "Superhuman")),
+            A(t: 4.6, kind: .appSwitch, app: "Superhuman", bundle: "com.superhuman.electron", window: "Superhuman"),
+            A(t: 7.5, kind: .typing, app: "Superhuman", bundle: "com.superhuman.electron", element: .init(role: "AXWebArea"), text: "gi"),
+            A(t: 17.4, kind: .shortcut, app: "Superhuman", bundle: "com.superhuman.electron", text: "⌘K"),
+            A(t: 18.4, kind: .typing, app: "Superhuman", bundle: "com.superhuman.electron", element: .init(role: "AXTextField"), text: "open"),
+            A(t: 19.0, kind: .shortcut, app: "Superhuman", bundle: "com.superhuman.electron", text: "↩"),
+            A(t: 22.5, kind: .appSwitch, app: "Dia", bundle: "company.thebrowser.dia"),
+        ], notes: [], video: "screen.mov")
+        let steps = StepsFromRecording.steps(from: take)
+        precondition(steps.map(\.intent) == ["Open Superhuman", "Type “gi”", "Press ⌘K", "Type “open”", "Press ↩", "Open Dia"])
+        precondition(steps[0].target.app == "com.superhuman.electron" && steps[0].parameters["action"] == "activate")
+        precondition(steps.map { $0.parameters["action"] ?? "" } == ["activate", "type", "keys", "type", "keys", "activate"])
+        precondition(steps.map(\.id) == (1...6).map { "step-\($0)" })
+        // Pauses from the recording, between 0.3 and 5 seconds.
+        precondition(steps.map { $0.parameters["after"] ?? "" } == ["0.0", "2.9", "5.0", "1.0", "0.6", "3.5"])
+        precondition(steps.allSatisfy { !$0.effect.needsApproval && $0.executor != .unsupported })
+
+        // Named controls are pressed; sending or deleting waits for approval; unnamed clicks need the mouse.
+        func click(_ role: String, _ title: String?) -> SkillDefinition.Step {
+            StepsFromRecording.steps(from: Recording(id: UUID(), startedAt: Date(), duration: 1, actions: [
+                A(t: 0, kind: .click, app: "Mail", bundle: "com.apple.mail", element: .init(role: role, title: title)),
+            ], notes: [], video: nil))[0]
+        }
+        let send = click("AXButton", "Send")
+        precondition(send.executor == .accessibility && send.parameters["action"] == "press" && send.effect == .send)
+        precondition(send.target.role == "AXButton" && send.target.title == "Send" && send.effect.needsApproval)
+        precondition(click("AXButton", "Mover a la papelera").effect == .delete)
+        precondition(click("AXButton", "Enviar ahora").effect == .send)
+        precondition(click("AXButton", "Sender details").effect == .write)   // whole words only
+        precondition(click("AXTextField", "Subject").parameters["action"] == "focus")
+        let unnamed = click("AXWebArea", nil)
+        precondition(unnamed.executor == .unsupported && unnamed.parameters["reason"]?.contains("mouse") == true)
+        precondition(click("AXGroup", "Toolbar").executor == .unsupported)
+
+        // Passwords and selections can't be replayed; ⌘↩ sends.
+        let other = StepsFromRecording.steps(from: Recording(id: UUID(), startedAt: Date(), duration: 1, actions: [
+            A(t: 0, kind: .typing, app: "Safari", element: .init(role: "AXTextField", subrole: "AXSecureTextField"), text: "secret"),
+            A(t: 1, kind: .selection, app: "Numbers", cells: "D5=1 E5=2"),
+            A(t: 2, kind: .shortcut, app: "Mail", text: "⌘↩"),
+        ], notes: [], video: nil))
+        precondition(other[0].executor == .unsupported && other[0].intent == "Type a password" && other[0].parameters["text"] == nil)
+        precondition(other[1].executor == .unsupported && other[1].intent == "Select D5, E5 in Numbers")
+        precondition(other[2].effect == .send)
+
+        // The definition keeps its recording link through a round trip.
+        var definition = SkillDefinition(steps: steps, recording: take.id)
+        definition.rules = SkillDefinition.Rule.lines("Only on weekdays")
+        let restored = try! JSONDecoder().decode(SkillDefinition.self, from: JSONEncoder().encode(definition))
+        precondition(restored == definition && restored.recording == take.id)
+        precondition(StepsFromRecording.steps(from: Recording(id: UUID(), startedAt: Date(), duration: 0, actions: [], notes: [], video: nil)).isEmpty)
+        print("PASS: a real take becomes six steps, Dock clicks merge, pauses kept, named presses, approval words, unsupported clicks, passwords, selections, recording link")
+    }
+}

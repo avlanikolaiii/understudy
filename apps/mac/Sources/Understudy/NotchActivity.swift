@@ -105,9 +105,24 @@ final class NotchActivity: ObservableObject {
 
     // MARK: After teaching
 
+    /// Under a skill whose steps came from a recording.
+    static let learnedFooter = "Steps from your recording · replayed exactly, no AI"
+
     func showLearned(_ skill: Skill) {
         let token = beginOverlay()
         let notes = skill.rules.split(whereSeparator: \.isNewline).count
+        let steps = skill.definition.steps
+        guard steps.isEmpty else {
+            let shown = steps.prefix(3).map { step in
+                step.executor == .unsupported
+                    ? row(step.parameters["app"] ?? "Step", step.intent, end: "needs you", endTone: .hold)
+                    : row(step.parameters["app"] ?? "Step", step.intent, end: "✓", endTone: .ok)
+            }
+            show(.learned, label: "New skill", detail: skill.name, meta: "\(steps.count) steps",
+                 rows: shown + [row("Notes", "\(notes) saved with the skill", tone: .said)], footer: Self.learnedFooter)
+            later(token, 4.5) { $0.endOverlay() }
+            return
+        }
         show(.learned, label: "New skill", detail: skill.name, meta: "3 steps", rows: [
             row("Sheet", "→ read the week's figures", end: "✓", endTone: .ok),
             row("Report", "→ fill your template", end: "✓", endTone: .ok),

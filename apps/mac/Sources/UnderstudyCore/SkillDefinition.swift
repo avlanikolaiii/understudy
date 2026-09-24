@@ -17,12 +17,14 @@ public struct SkillDefinition: Codable, Equatable, Sendable {
     public var output: Output?
     /// True when the skill was prepared by hand, not learned from a recording. The app labels it.
     public var simulated: Bool
+    /// The recording the steps came from, if any. Recordings stay on the Mac that made them.
+    public var recording: UUID?
 
     public init(trigger: Trigger = .manual, inputs: [Input] = [], steps: [Step] = [], rules: [Rule] = [],
-                output: Output? = nil, simulated: Bool = false) {
+                output: Output? = nil, simulated: Bool = false, recording: UUID? = nil) {
         schemaVersion = Self.currentVersion
         self.trigger = trigger; self.inputs = inputs; self.steps = steps; self.rules = rules
-        self.output = output; self.simulated = simulated
+        self.output = output; self.simulated = simulated; self.recording = recording
     }
 
     /// A skill with notes but no learned steps, as the prototype saves today.
@@ -34,7 +36,7 @@ public struct SkillDefinition: Codable, Equatable, Sendable {
     public var notes: String { rules.map(\.text).joined(separator: "\n") }
 
     private enum CodingKeys: String, CodingKey {
-        case schemaVersion, trigger, inputs, steps, rules, output, simulated
+        case schemaVersion, trigger, inputs, steps, rules, output, simulated, recording
     }
 
     private enum LegacyKeys: String, CodingKey { case rules, simulated }
@@ -58,6 +60,7 @@ public struct SkillDefinition: Codable, Equatable, Sendable {
         rules = try c.decode([Rule].self, forKey: .rules)
         output = try c.decodeIfPresent(Output.self, forKey: .output)
         simulated = try c.decode(Bool.self, forKey: .simulated)
+        recording = try c.decodeIfPresent(UUID.self, forKey: .recording)
     }
 }
 
