@@ -87,14 +87,17 @@ final class WatchSession: ObservableObject {
         if elapsed != elapsedSeconds { elapsedSeconds = elapsed }
     }
 
-    func stop() {
-        guard isWatching else { return }
+    /// Stops recording. `finished` runs once the video is written (or there is none), e.g. so the
+    /// app can quit without losing the take.
+    func stop(finished: @escaping () -> Void = {}) {
+        guard isWatching else { return finished() }
         advance()
         addRule()
         timer?.cancel(); timer = nil
         let take = id, folder = recordingFolder, duration = now() - startedAt
         // Still watching while the source stops, so its last actions (pending typing) are kept.
         source.stop { [weak self] result in
+            defer { finished() }
             let video: String
             switch result {
             case .none: return

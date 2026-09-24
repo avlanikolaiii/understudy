@@ -94,6 +94,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApplication.shared.mainMenu = menu
     }
 
+    /// Quitting while Watch records stops it and waits (up to 5 s) for the take to be saved.
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        guard env.watch.isWatching else { return .terminateNow }
+        var replied = false
+        let reply = { if !replied { replied = true; sender.reply(toApplicationShouldTerminate: true) } }
+        env.watch.stop(finished: reply)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 5, execute: reply)
+        return .terminateLater
+    }
+
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
         // Keep a focused settings recorder in place when the app is already visible.
         if !flag { workspace.show() }

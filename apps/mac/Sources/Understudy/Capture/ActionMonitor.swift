@@ -145,6 +145,8 @@ final class ActionMonitor {
         let current = take
         DispatchQueue.main.asyncAfter(deadline: .now() + seconds) { [self] in
             guard take == current, pendingSelections.remove(pid) != nil else { return }
+            // Anything typed before it is recorded first, so actions stay in the order they happened.
+            flushTyping()
             recordSelection(pid: pid)
         }
     }

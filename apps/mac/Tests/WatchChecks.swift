@@ -99,6 +99,19 @@ struct WatchChecks {
         session.dismiss()
         capture.finishVideos()
 
+        // Stop reports when the take is fully saved (what quitting waits for); idle reports at once.
+        var finished = 0
+        capture.video = "screen.mov"
+        session.start(automaticTicks: false)
+        session.stop { finished += 1 }
+        precondition(finished == 0)
+        capture.finishVideos()
+        precondition(finished == 1 && WatchSession.load(session.recordingFolder)?.video == "screen.mov")
+        session.stop { finished += 1 }
+        precondition(finished == 2)
+        session.dismiss()
+        capture.video = nil
+
         // A video that can't be saved is reported; the steps are kept.
         capture.video = ScriptedCapture.failingVideo
         session.start(automaticTicks: false)
