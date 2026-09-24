@@ -188,6 +188,9 @@ final class SelfTest {
     private func snapshot(_ window: NSWindow?, name: String) {
         if window is NotchPanel {
             guard let rep = app.notch.render() else { return fail("screen.renders", "\(name): the notch didn't render") }
+            // The captures reach every notch state on purpose, so they count toward coverage;
+            // otherwise a short run could miss a state by chance (the demo is rare in random walks).
+            visit("notch.\(app.env.activity.mode)")
             return finishSnapshot(rep, name: name)
         }
         guard let view = window?.contentView, view.bounds.width > 0, view.bounds.height > 0,
