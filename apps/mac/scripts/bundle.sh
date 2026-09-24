@@ -30,7 +30,6 @@ cat > "$APP/Contents/Info.plist" <<PLIST
   <key>CFBundleShortVersionString</key><string>0.1.0</string>
   <key>CFBundleVersion</key><string>1</string>
   <key>LSMinimumSystemVersion</key><string>14.0</string>
-  <key>LSUIElement</key><true/>
   <key>NSHumanReadableCopyright</key><string>Understudy prototype. Not for distribution.</string>
   <key>CFBundleURLTypes</key>
   <array>
@@ -42,5 +41,16 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 </dict>
 </plist>
 PLIST
-codesign --force --deep --sign - "$APP" >/dev/null
+# Sign with the fixed identity from scripts/make-signing-identity.sh when it exists, so macOS keeps
+# this app's privacy permissions across builds. Otherwise ad-hoc, which macOS treats as a new app
+# every build.
+KEYCHAIN="$PWD/.signing/understudy.keychain-db"
+if [ -f "$KEYCHAIN" ]; then
+  security unlock-keychain -p "$(cat .signing/keychain-password)" "$KEYCHAIN"
+  codesign --force --deep --sign "Understudy Open Source" --keychain "$KEYCHAIN" "$APP" >/dev/null
+  echo "Signed with the Understudy Open Source identity"
+else
+  codesign --force --deep --sign - "$APP" >/dev/null
+  echo "Signed ad-hoc (run scripts/make-signing-identity.sh to keep permissions across builds)"
+fi
 echo "Built $APP"
