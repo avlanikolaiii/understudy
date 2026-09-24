@@ -1,7 +1,7 @@
 # Weekly report engine
 
 `apps/mac/Sources/Understudy/ReportEngine.swift` computes real figures from supplied CSV
-and renders the layout in `templates/weekly-update.md`, following
+and renders the layout in `data/templates/weekly-update.md`, following
 `docs/report-spec.md`. It is a pure Foundation module: no file access, network,
 Supabase, SwiftUI, or shared mutable state. The teaching source data is fictional;
 the arithmetic and Markdown generation are implemented.

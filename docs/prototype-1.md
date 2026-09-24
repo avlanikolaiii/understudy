@@ -7,8 +7,8 @@ The question this prototype answers: can one demonstration become a reusable pro
 ## In scope
 
 - One workflow: the weekly client update.
-- One input: a Google Sheet, read-only. During development it's a local CSV (`fixtures/`), and a dedicated test spreadsheet is created only when the connector experiment needs it.
-- One output: a Markdown report from `templates/weekly-update.md`. PDF export comes after the content tests pass.
+- One input: a Google Sheet, read-only. During development it's a local CSV (`data/fixtures/`), and a dedicated test spreadsheet is created only when the connector experiment needs it.
+- One output: a Markdown report from `data/templates/weekly-update.md`. PDF export comes after the content tests pass.
 - Learning from one demonstration, blind rehearsal, a missing-figure test, and a basic receipt.
 - A sample-data first run that needs no connected accounts.
 - A minimal notch or menu-bar panel to start and stop.
@@ -19,7 +19,7 @@ Tracker updates, client email, other connectors and MCP, client-wide and global 
 
 ## Rules that hold for every test
 
-- **Teaching and evaluation stay separate.** Only `fixtures/teaching/` is available during development. `evaluation/holdout/` (weeks 4–7: both the input sheets and the expected reports) is read only by the test harness. See its README.
+- **Teaching and evaluation stay separate.** Only `data/fixtures/teaching/` is available during development. `data/evaluation/holdout/` (weeks 4–7: both the input sheets and the expected reports) is read only by the test harness. See its README.
 - **Read-only means every connected account.** During rehearsal, Understudy must not modify any live sheet, document, draft, file, or other account data. It may write only to an isolated local output folder (`runs/`). Where possible this is enforced with read-only credentials, not just avoided.
 - **Numbers are exact under `docs/report-spec.md`.** Source figures must equal the sheet. Calculated figures must follow the spec's formulas and decimal half-up rounding.
 

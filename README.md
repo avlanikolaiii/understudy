@@ -13,9 +13,9 @@ A Mac companion that learns a recurring task from one demonstration, rehearses i
 | `docs/report-spec.md` | Exact formulas, rounding, and the missing-data rule |
 | `docs/capture-experiment.md` | M1: can a demonstration be captured? Protocol and results |
 | `docs/validation/` | Customer-interview kit in English and Spanish (nothing sent yet) |
-| `templates/weekly-update.md` | The fixed report template |
-| `fixtures/teaching/` | Synthetic teaching data. Readable during development |
-| `evaluation/holdout/` | Held-out weeks for testing only. **Don't open during development** |
+| `data/templates/weekly-update.md` | The fixed report template |
+| `data/fixtures/teaching/` | Synthetic teaching data. Readable during development |
+| `data/evaluation/holdout/` | Held-out weeks for testing only. **Don't open during development** |
 | `tools/ax-capture/` | The capture experiment recorder |
 
 Never commit client examples, credentials, or generated reports. `.gitignore` covers `client-examples/`, `runs/`, `out/`, and token files.
