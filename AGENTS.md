@@ -53,21 +53,21 @@ There used to be two experiences in one binary: the account notch panel and Code
 
 ### Done after handoff (slice 2)
 - **Watch, simulated:** a five-step predefined replay in the notch, pulsing indicator, timer, temporary rules, Stop, Replay, and Done. Available without sign-in. The configured global shortcut (default Option-Space) stops an active replay.
-- Release bundle, session checks, and rendered-view checks passed. Full notch/shortcut interaction and the no-notch fallback are not yet verified end to end. See `docs/watch-slice.md`.
-- `docs/product-context.md` captures the original Claude conversations, product artifacts, superseded ideas, and unresolved design gaps. Read it before changing the product direction.
+- Release bundle, session checks, and rendered-view checks passed. Full notch/shortcut interaction and the no-notch fallback are not yet verified end to end. See `docs/app/watch-slice.md`.
+- `docs/product/product-context.md` captures the original Claude conversations, product artifacts, superseded ideas, and unresolved design gaps. Read it before changing the product direction.
 
 ### Shortcut settings
-- The notch gear and menu-bar **Keyboard Shortcut…** open a native recorder. The shortcut persists across launches, supports restoring Option-Space, and retains the old binding when a remap fails. See `docs/keyboard-shortcuts.md`.
+- The notch gear and menu-bar **Keyboard Shortcut…** open a native recorder. The shortcut persists across launches, supports restoring Option-Space, and retains the old binding when a remap fails. See `docs/app/keyboard-shortcuts.md`.
 
 ### Main app teaching and native workspace
 - The workspace and notch share a single simulated Watch session. Start from **Teach a skill** in the main app, stop/replay in either surface, and carry notes into local sample-skill review.
 - The main window uses a native sidebar and toolbar, system appearance, Dock entry, and standard menus. Command-N opens teaching; Command-comma opens shortcut settings.
-- The existing local sample skill/rehearsal/export prototype is retained. It does not replace the account-backed slices below. See `docs/interface-prototype.md`.
+- The existing local sample skill/rehearsal/export prototype is retained. It does not replace the account-backed slices below. See `docs/app/interface-prototype.md`.
 
 ### Next slices, in order
 1. **Skill review**: the learned skill shown in plain words (trigger, steps, inputs, rules), with rules editable. The skill is prepared in advance (*simulated* learning) and saved to `skills.definition` (jsonb).
 2. **Rehearse**: two past teaching weeks, a read-only badge, its version and what was sent side by side, matches and differences, then Hand off / Rehearse again / Correct (a correction applies to this workflow only).
-3. **Run and receipt**: compute the report from the sheet using `docs/report-spec.md`, write the Markdown file to a local git-ignored folder, read it back as evidence, and save the receipt to `receipts`. Include a toggle for a week with **ad spend missing**: the report stays an incomplete draft, the tracker says it needs input, and the email is held back.
+3. **Run and receipt**: compute the report from the sheet using `docs/product/report-spec.md`, write the Markdown file to a local git-ignored folder, read it back as evidence, and save the receipt to `receipts`. Include a toggle for a week with **ad spend missing**: the report stays an incomplete draft, the tracker says it needs input, and the email is held back.
 4. **Google Sheets connector** (read-only scope; rehearsal must use a read-only token).
 5. **AI proxy**: a Supabase Edge Function that holds the Anthropic key server-side and is used for summary and highlight text. Never put the key in the app.
 
@@ -76,7 +76,7 @@ There used to be two experiences in one binary: the account notch panel and Code
 - **Honest labels.** Never present simulated behavior as working. Label it "Simulated" or "Concept demonstration" in the UI and the docs. Nothing is "working" without a demo you can reproduce.
 - **Held-out data.** `data/evaluation/holdout/` contains unseen test weeks. App and learning code must **never** read it. Only a test harness may. Use `data/fixtures/teaching/` for development and demos.
 - **Read-only rehearsal** across *every* connected account. Write only to a local output folder.
-- **Numbers** follow `docs/report-spec.md` exactly: decimal half-up rounding, and missing data is never estimated.
+- **Numbers** follow `docs/product/report-spec.md` exactly: decimal half-up rounding, and missing data is never estimated.
 - **Secrets** (the Google client secret, Apple `.p8` key, Anthropic key, Supabase service key) never go into the repo or the app. `.gitignore` covers `config.local.json`, `runs/`, `client-examples/`, and the key files.
 - **Don't** send outreach, create files in the user's Google Drive, or request new macOS permissions without asking the human first.
 - **Toolchain gotcha:** this Mac has the Command Line Tools, not Xcode. The SwiftUI macro plugins are missing, so **don't use `@State`, `@Observable`, or `#Preview`**. Keep view state in `ObservableObject` classes with `@Published`, as the existing code does. Build with `swift build` or `apps/mac/scripts/bundle.sh`.
@@ -95,9 +95,9 @@ There used to be two experiences in one binary: the account notch panel and Code
 | `apps/mac/` | The macOS app (current work) |
 | `supabase/migrations/` | Database schema and security |
 | `docs/setup/accounts.md` | Account setup for the human |
-| `docs/prototype-1.md`, `docs/report-spec.md` | Prototype scope and the exact report math |
-| `docs/capture-experiment.md`, `tools/ax-capture/` | Capture experiment (paused) and recorder |
-| `docs/validation/` | Interview kit in English and Spanish (paused, nothing sent) |
+| `docs/product/prototype-1.md`, `docs/product/report-spec.md` | Prototype scope and the exact report math |
+| `docs/research/capture-experiment.md`, `tools/ax-capture/` | Capture experiment (paused) and recorder |
+| `docs/research/validation/` | Interview kit in English and Spanish (paused, nothing sent) |
 | `data/fixtures/teaching/`, `data/templates/` | Sample agency data and the report template |
 | `data/evaluation/holdout/` | **Don't read.** Held-out test weeks |
 

@@ -3,7 +3,7 @@
 > **Update 2026-09-23 (Claude Code):** the notch no longer drops down a panel. It is now the landing page's live strip (see `interface-prototype.md`). The shortcut starts Watch, and pressing it again stops and opens the review in the main window. Rules are typed in the main window's Watch view. The steps below that mention notch buttons (Stop, Replay, Done, Add rule) now live in the main window.
 
 This slice replays five predefined steps based on the Phase A teaching script in
-`docs/capture-experiment.md`. It does not read capture logs, record the screen,
+`docs/research/capture-experiment.md`. It does not read capture logs, record the screen,
 learn a skill, access connected apps, or read evaluation data. The timer and
 interaction are real; the displayed workflow is simulated.
 
@@ -35,7 +35,7 @@ replay running. The menu-bar **Open Understudy** item reopens it for inspection.
 The collapsed notch dot pulses during playback. Reduced Motion uses a steady dot. A new Watch session
 after **Done**, or quitting the app, clears these temporary notes.
 
-Change the shortcut through the notch gear or the menu-bar **Keyboard Shortcut…** item. See `docs/keyboard-shortcuts.md`.
+Change the shortcut through the notch gear or the menu-bar **Keyboard Shortcut…** item. See `docs/app/keyboard-shortcuts.md`.
 
 ## Check the session behavior
 
