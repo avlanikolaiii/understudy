@@ -49,7 +49,25 @@ The toolchain is the Command Line Tools only (no Xcode). Run commands from the r
 | Notch checks | `swiftc -parse-as-library apps/mac/Sources/Understudy/{Library,WatchSession,WorkspaceState,NotchActivity}.swift apps/mac/Tests/NotchChecks.swift -o /tmp/c && /tmp/c` |
 | Shortcut checks | `swiftc apps/mac/Sources/Understudy/KeyboardShortcut.swift apps/mac/Tests/ShortcutChecks.swift -o /tmp/c && /tmp/c` |
 
-Continuous integration runs the same commands on every pull request (`.github/workflows/ci.yml`).
+Continuous integration runs the checks, the full QA (`qa/run.py`), and a real first launch on every pull request, on macos-14, macos-15, and macos-26 (`.github/workflows/ci.yml`).
+
+## QA and evals
+
+`python3 qa/run.py` is the release gate. It uses the standard library only; run it from the repository root on a Mac.
+
+- **Checks:** the six standalone checks.
+- **Self-test:** `Understudy --self-test=SESSIONS,SEED`. It simulates people using the real app objects: random walks over `qa/flows.json` that use only controls on screen and enabled. It checks documented rules after every step and renders every screen to PNG. It uses a temporary library and no server, so your data is never touched.
+- **Website:** `apps/web/qa.mjs` checks every built page.
+- **Held-out eval:** `qa/eval-holdout.swift`. It is the only reader of `data/evaluation/`, and it prints scores only.
+- **Agent-run suites:**
+  - `qa/browser-sessions.js`: simulated visitors against a fake Supabase.
+  - `qa/db-waitlist.sql`: a mass waitlist test, rolled back.
+  - Save their JSON to `qa/out/browser.json` and `qa/out/db.json`.
+- **Output:** `qa/out/report.html` shows a coverage graph of every flow node, the trend across runs (`qa/history.jsonl`), actions taken, and eval scores.
+
+**A finding counts only if all three hold:** it reproduces twice from its seed or steps; it points to a line of code; and it breaks documented behavior, not taste. Screenshot or timing artifacts are verified against the real screen before anything is called a bug.
+
+**Done when:** three consecutive clean iterations, every automated node covered, and CI green on every macOS version.
 
 ## Rules
 
@@ -107,6 +125,8 @@ Reopen these only with the human's approval.
 - **Corrections:** a correction applies to the current workflow only in the first prototype.
 
 ## Roadmap
+
+The long-term architecture, what is temporary today, and the phases are in `docs/product/long-term-plan.md`.
 
 1. **Skill review:** show the learned skill in plain words (trigger, steps, inputs, rules), make rules editable, and save to `skills.definition`.
 2. **Real rehearsal:** drive rehearsal with `ReportEngine` on the teaching weeks instead of fixed sample text, and compare against the sent reports.
