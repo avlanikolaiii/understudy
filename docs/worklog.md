@@ -3,8 +3,8 @@
 Both agents work in this repo. Read this file and `git status` before starting.
 
 **Now working (split, since 2026-09-23 19:20):**
-- **Claude Code:** the Supabase setup. Files: `supabase/`, `docs/setup/`, `app/config.local.json`, `AppModel.swift`, `SkillLibrary.swift`, `AccountView.swift`, `Config.swift`, `scripts/bundle.sh`.
-- **Codex: done**
+- **Claude Code:** the Supabase sign-in test with the human. Files: `AppModel.swift`, `SkillLibrary.swift`, `AccountView.swift`, `Config.swift`.
+- **Codex:** free.
 
 Don't edit the other agent's files until its line is released.
 
@@ -71,3 +71,20 @@ Entries are append-only, newest last. Use this format:
 - verified: the exact requested `swiftc` command and executable passed all five check groups. Swift 6 strict concurrency with warnings-as-errors also passed. Teaching weeks 1, 2, and 3 match the fixture titles, dates, and all table lines exactly. Synthetic checks cover half-up ties (including signed changes and repeating rates), sum-before-rounding, blank Video spend and dependent values, other missing cells, zero leads/spend, missing/zero/absent prior figures, CSV normalization, deterministic row order, and invalid input. Whitespace checks passed. No spec/fixture disagreements. No held-out data was accessed.
 - not verified: app integration, app bundle, Supabase, Google Sheets, AI proxy, output-file read-back, tracker/email behavior, or receipt persistence. `isComplete` concerns source figures only; all three judgment sections still show `[AI step: not connected yet]`.
 - next: commit the engine/checks, then docs/worklog from a session allowed to write Git metadata; end each commit message with `Co-Authored-By: Codex <noreply@openai.com>`. Wire the engine into the app in the next authorized slice, keeping missing-data gating and AI placeholders visible.
+
+## 2026-09-23 19:45 · Claude Code · Live Supabase project + Codex's report engine committed
+- commits: 297261a (Codex's engine, committed for it; the Codex sandbox can't write .git), 7b63cd5 (grants migration), plus this docs commit.
+- what:
+  - Created the Supabase project `Understudy` (idwgaqnpheittqtllhzl, sa-east-1) in the human's account.
+  - Applied migrations 0001–0003 through the SQL editor.
+  - Revoked anon access.
+  - Allowed `understudy://auth-callback`.
+  - Wrote `app/config.local.json` with the publishable key only.
+  - Rebuilt the app.
+- verified:
+  - SQL catalog: 3 tables with RLS and 1/4/2 policies, the free-limit trigger, the sign-up trigger, authenticated grants, and no anon grants.
+  - Live API: `/auth/v1/settings` says email on, Google/Apple off, sign-up allowed. A signed-out read of `skills` returns 401 permission denied.
+  - Codex's ReportChecks re-run by Claude: 5/5 pass. Codex's log has no commands touching `evaluation/`.
+- not verified: an actual sign-in from the app (needs the human's email inbox), and a skill/receipt round trip to the account.
+- note for Codex: `codex exec -s workspace-write` can't commit. Leave the files uncommitted plus a worklog entry, and Claude or the human commits them.
+- next: the human tests email-link sign-in. Then wire ReportEngine into rehearsal (real numbers from fixtures/teaching instead of SampleEngine), then Google sign-in.
