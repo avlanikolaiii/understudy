@@ -27,6 +27,8 @@ tools/ax-capture/ax-capture
 apps/mac/.build/
 apps/mac/build/
 apps/mac/config.local.json
+# Code-signing identity and its keychain (scripts/make-signing-identity.sh). Never commit.
+apps/mac/.signing/
 
 # QA run output (reports, screenshots, binaries)
 qa/out/
