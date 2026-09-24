@@ -9,10 +9,7 @@ struct MainWindowView: View {
     @ObservedObject var activity: NotchActivity
     var openSettings: () -> Void = {}
 
-    private var activeSkill: Skill {
-        // The built-in sample is only a fallback in Sample mode; account rehearsals need a saved skill.
-        library.skills.first(where: { $0.id == ui.selectedSkill?.id }) ?? library.skills.first ?? .sample
-    }
+    private var activeSkill: Skill { ui.activeSkill(in: library) }
     private var receipt: Receipt? {
         library.receipts.first(where: { $0.id == ui.selectedReceipt }) ?? library.receipts.first
     }
@@ -140,11 +137,9 @@ struct MainWindowView: View {
                 HStack {
                     Button("Back") { ui.teachingStep = 1 }
                     primary("Save sample skill", symbol: "checkmark") {
-                        let skill = Skill(name: ui.skillName.trimmingCharacters(in: .whitespacesAndNewlines), client: ui.clientName.trimmingCharacters(in: .whitespacesAndNewlines), rules: ui.rules)
-                        library.save(skill) { saved in ui.selectedSkill = saved; activity.showLearned(saved) }
-                        watch.dismiss(); ui.teachingStep = 0; ui.page = .skills
+                        ui.saveReviewedSkill(library: library, watch: watch, activity: activity)
                     }
-                    .disabled(ui.skillName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || ui.clientName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    .disabled(!ui.canSaveSkill)
                 }
             }
         }
@@ -178,10 +173,7 @@ struct MainWindowView: View {
             detail("WHAT CHANGES", ui.scenario == .complete ? "All sample figures are present. The report is ready for your review." : "Video spend is absent. Total spend and cost per lead stay missing; sharing is blocked.")
             HStack(spacing: 12) {
                 primary("Rehearse sample", symbol: "play.fill") {
-                    let skill = activeSkill
-                    activity.rehearse(skill, scenario: ui.scenario, record: library.recorder(for: skill)) { receipt in
-                        ui.selectedReceipt = receipt.id; ui.page = .results
-                    }
+                    ui.rehearseActiveSkill(library: library, activity: activity)
                 }.disabled(activity.isRehearsing || !library.canRehearse)
                 if activity.isRehearsing {
                     ProgressView().controlSize(.small)
