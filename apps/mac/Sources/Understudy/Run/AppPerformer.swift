@@ -19,6 +19,7 @@ final class AppPerformer: StepPerformer {
         case "activate": activate(step, done)
         case "press", "focus": act(on: step, done)
         case "waitText", "waitSeconds": wait(step, done)
+        case "open": open(step, done)
         case "type": type(step, done)
         case "keys": keys(step, done)
         default: done(StepOutcome(.blocked, .none, step.parameters["reason"] ?? "This step can't run yet."))
@@ -139,6 +140,24 @@ final class AppPerformer: StepPerformer {
         poll({ AX.shows(text, pid: app.processIdentifier) }, timeout: Self.timeout(step)) { shown in
             done(shown ? StepOutcome(.done, .verified, "\(RecordedAction.quote(text)) shows in \(app.localizedName ?? "the app").")
                        : StepOutcome(.failed, .none, "\(RecordedAction.quote(text)) didn't show within \(Int(Self.timeout(step))) s."))
+        }
+    }
+
+    /// "Open a link or file": a web or app link (spotify:…) or a path, in its default app.
+    private func open(_ step: SkillDefinition.Step, _ done: @escaping (StepOutcome) -> Void) {
+        let link = (step.parameters["link"] ?? "").trimmingCharacters(in: .whitespaces)
+        let url = link.hasPrefix("/") || link.hasPrefix("~") ? URL(fileURLWithPath: (link as NSString).expandingTildeInPath) : URL(string: link)
+        guard let url, url.scheme != nil else { return done(StepOutcome(.failed, .none, "\(RecordedAction.quote(link)) isn't a link or a file path.")) }
+        guard url.scheme != "file" || FileManager.default.fileExists(atPath: url.path) else {
+            return done(StepOutcome(.failed, .none, "\(url.path) doesn't exist."))
+        }
+        let opener = NSWorkspace.shared.urlForApplication(toOpen: url)
+        guard NSWorkspace.shared.open(url) else { return done(StepOutcome(.failed, .none, "macOS couldn't open \(RecordedAction.quote(link)).")) }
+        // Verified when the app that opens it comes to the front.
+        let bundle = opener.flatMap { Bundle(url: $0)?.bundleIdentifier }
+        poll({ bundle != nil && NSWorkspace.shared.frontmostApplication?.bundleIdentifier == bundle }, timeout: 5) { inFront in
+            done(inFront ? StepOutcome(.done, .verified, "Opened \(RecordedAction.quote(link)) in \(opener?.deletingPathExtension().lastPathComponent ?? "its app").")
+                         : StepOutcome(.done, .notVerifiable, "Asked macOS to open \(RecordedAction.quote(link))."))
         }
     }
 

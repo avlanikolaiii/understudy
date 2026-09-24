@@ -9,9 +9,11 @@ final class FakePerformer: StepPerformer {
     var cancelled = 0
     var holdNext = false
     var held: ((StepOutcome) -> Void)?
+    var lastStep: SkillDefinition.Step?
 
     func perform(_ step: SkillDefinition.Step, done: @escaping (StepOutcome) -> Void) {
         performed.append(step.id)
+        lastStep = step
         if holdNext { holdNext = false; held = done; return }
         done(outcomes[step.id] ?? StepOutcome(.done, .verified, "ok"))
     }
@@ -116,6 +118,13 @@ struct RunChecks {
         precondition(Matching.appeared(after: "Bloom Album • Caligula's Horse", before: ["Your Library", "Liked Songs"], after: ["Your Library", "Bloom"]))
         precondition(!Matching.appeared(after: "Bloom", before: ["Bloom"], after: ["Bloom"]))
         precondition(!Matching.appeared(after: "Play", before: [], after: ["Pl"]))
+
+        // Values fill a step's placeholders when it runs.
+        performer = FakePerformer()
+        engine = RunEngine(steps: [ManualStep.type("Play {album}", app: nil, bundle: nil)], mode: .run, performer: performer,
+                           values: ["album": "Bloom"], wait: now) { _ in }
+        engine.start()
+        precondition(performer.lastStep?.parameters["text"] == "Play Bloom" && engine.steps[0].parameters["text"] == "Play {album}")
 
         // An empty skill completes at once.
         engine = RunEngine(steps: [], mode: .run, performer: FakePerformer(), wait: now) { _ in }

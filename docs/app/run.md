@@ -33,6 +33,13 @@ The review lists the steps; each can be deleted, moved up, or retyped. They are 
 
 Measured live on Spotify: the "Bloom" album heading is recognized as the result of pressing Bloom; "Bloom Album • Caligula's Horse" is found exactly; the short name "Bloom" finds two possible matches, so it isn't guessed.
 
+## Editing a skill
+
+- **Add step** (the **+** before any step, or at the end), in the Teach review and in **Edit**: open an app, press keys (recorded from your keyboard), type text, wait until a text shows, wait some seconds, or open a link or file (`https://…`, `spotify:…`, a path).
+- **Record this step** (the ● on a step, in **Edit**): Watch records a new take; when you stop, its steps replace just that step.
+- **Values asked when it runs:** write `{name}` in what a step types or opens (e.g. `Hello {client}`, `spotify:album:{album}`). **Edit** sets each value's default; **Run now** asks for them; a *file added* trigger fills `{file}` and `{fileName}`; schedules use the defaults.
+- **The moment in the recording:** each recorded step shows the frame of its video at that moment (made on this Mac, kept next to the recording), so you see exactly what was clicked.
+
 ## Running
 
 Skills → **Run now** or **Test step by step** (every step waits for "Run this step").

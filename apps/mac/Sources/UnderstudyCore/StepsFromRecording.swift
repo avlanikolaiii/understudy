@@ -51,6 +51,8 @@ public enum StepsFromRecording {
                 continue
             }
             step.parameters["after"] = String(format: "%.1f", after)
+            // When it happened in the recording, to show that moment of the video next to the step.
+            step.parameters["t"] = String(format: "%.2f", action.t)
             step.id = "step-\(steps.count + 1)"
             steps.append(step)
         }

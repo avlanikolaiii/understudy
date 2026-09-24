@@ -59,9 +59,14 @@ public final class RunEngine {
     /// Where the run starts: 0, or the step to resume from after an earlier run stopped there.
     public let startIndex: Int
 
+    /// Values for the skill's `{name}` placeholders.
+    public let values: [String: String]
+
     public init(steps: [SkillDefinition.Step], mode: Mode, performer: StepPerformer, startingAt startIndex: Int = 0,
+                values: [String: String] = [:],
                 wait: @escaping (Double, @escaping () -> Void) -> Void, onEvent: @escaping (Event) -> Void) {
         self.steps = steps; self.mode = mode; self.performer = performer; self.wait = wait; self.onEvent = onEvent
+        self.values = values
         self.startIndex = min(max(0, startIndex), steps.count)
         results = steps.indices.map { index in
             index < startIndex ? StepOutcome(.skipped, .none, "Not repeated: done in the run this one resumes.")
@@ -128,7 +133,7 @@ public final class RunEngine {
     }
 
     private func perform(_ index: Int) {
-        let step = steps[index], mine = turn
+        let step = Variables.fill(steps[index], with: values), mine = turn
         onEvent(.started(index))
         wait(mode == .stepByStep ? 0 : Self.pause(before: step)) { [weak self] in
             guard let self, self.turn == mine, self.outcome == nil else { return }
