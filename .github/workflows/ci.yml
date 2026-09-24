@@ -28,10 +28,38 @@ jobs:
         working-directory: apps/web
         run: node qa.mjs
 
+  build:
+    # Building needs Swift 6.1 or later (supabase-swift requires it), so the app is built once,
+    # the way a release would be, and the same bundle is tested on every macOS version below.
+    name: Build, checks, and evals
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Toolchain
+        run: sw_vers && swift --version
+      - uses: actions/cache@v4
+        with:
+          path: apps/mac/.build
+          key: spm-macos-15-${{ hashFiles('apps/mac/Package.resolved') }}
+      - name: Build the app
+        run: apps/mac/scripts/bundle.sh
+      - name: Signature
+        run: codesign --verify --deep --strict apps/mac/build/Understudy.app
+      - name: Checks and held-out eval
+        run: python3 qa/run.py --skip-build --only checks,eval-holdout
+      - name: Package the app
+        # tar keeps the executable bit and the signature intact across the artifact upload.
+        run: tar -czf Understudy.app.tgz -C apps/mac/build Understudy.app
+      - uses: actions/upload-artifact@v4
+        with:
+          name: understudy-app
+          path: Understudy.app.tgz
+
   mac:
     # Each runner is a fresh Mac nobody has used: no app data, no server config (Sample mode),
-    # and no notch (the drop-down fallback). That is the first run on any person's MacBook.
-    name: Mac · ${{ matrix.os }}
+    # and no notch (the drop-down fallback). It receives the built app, as a person would.
+    name: Run on ${{ matrix.os }}
+    needs: build
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -39,21 +67,16 @@ jobs:
         os: [macos-14, macos-15, macos-26]
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/download-artifact@v4
         with:
-          node-version: 20
-      - name: Toolchain
-        run: sw_vers && swift --version
-      - uses: actions/cache@v4
-        with:
-          path: apps/mac/.build
-          key: spm-${{ matrix.os }}-${{ hashFiles('apps/mac/Package.resolved') }}
-      - name: Build the app
-        run: apps/mac/scripts/bundle.sh
-      - name: Signature
-        run: codesign --verify --deep --strict apps/mac/build/Understudy.app
-      - name: QA (checks, simulated users, website, held-out evals)
-        run: python3 qa/run.py --skip-build --sessions 80 --seeds 1,2
+          name: understudy-app
+      - name: Install the built app
+        run: |
+          sw_vers
+          mkdir -p apps/mac/build && tar -xzf Understudy.app.tgz -C apps/mac/build
+          codesign --verify --deep --strict apps/mac/build/Understudy.app
+      - name: Simulated users
+        run: python3 qa/run.py --skip-build --only self-test --sessions 80 --seeds 1,2
       - name: First launch
         run: |
           before=$(ls ~/Library/Logs/DiagnosticReports 2>/dev/null | grep -c Understudy || true)

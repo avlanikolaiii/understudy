@@ -36,7 +36,7 @@ Understudy is a macOS companion that lives in the MacBook notch, with a menu bar
 
 ## Build and test
 
-The toolchain is the Command Line Tools only (no Xcode). Run commands from the repository root.
+The toolchain is the Command Line Tools only (no Xcode). Building needs Swift 6.1 or later (supabase-swift requires it); the built app runs on macOS 14 or later. Run commands from the repository root.
 
 | Task | Command |
 |---|---|
@@ -49,7 +49,7 @@ The toolchain is the Command Line Tools only (no Xcode). Run commands from the r
 | Notch checks | `swiftc -parse-as-library apps/mac/Sources/Understudy/{Library,WatchSession,WorkspaceState,NotchActivity}.swift apps/mac/Tests/NotchChecks.swift -o /tmp/c && /tmp/c` |
 | Shortcut checks | `swiftc apps/mac/Sources/Understudy/KeyboardShortcut.swift apps/mac/Tests/ShortcutChecks.swift -o /tmp/c && /tmp/c` |
 
-Continuous integration runs the checks, the full QA (`qa/run.py`), and a real first launch on every pull request, on macos-14, macos-15, and macos-26 (`.github/workflows/ci.yml`).
+Continuous integration builds the app once (macos-15, Swift 6.1), runs the checks and held-out eval, and then installs that same bundle on fresh macos-14, macos-15, and macos-26 runners for simulated users and a real first launch, on every pull request (`.github/workflows/ci.yml`).
 
 ## QA and evals
 
