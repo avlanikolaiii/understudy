@@ -104,4 +104,4 @@ Work happens on branches and lands through pull requests. The workflow and proje
 
 ## License
 
-Private repository. All rights reserved. An open-source license is planned but not yet chosen.
+[Apache License 2.0](LICENSE). The repository is private until its first public release.
