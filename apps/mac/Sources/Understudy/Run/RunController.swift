@@ -37,7 +37,7 @@ final class RunController: ObservableObject {
 
     /// Starts `skill`. Returns false, with `problem` set, if it can't run now.
     @discardableResult
-    func start(_ skill: Skill, mode: RunEngine.Mode) -> Bool {
+    func start(_ skill: Skill, mode: RunEngine.Mode, from index: Int = 0) -> Bool {
         problem = nil
         guard !isRunning else { problem = "\(self.skill?.name ?? "Another skill") is running. Stop it first."; return false }
         guard !skill.definition.steps.isEmpty else { problem = "\(skill.name) has no steps to run."; return false }
@@ -45,7 +45,7 @@ final class RunController: ObservableObject {
         self.skill = skill
         self.mode = mode
         let record = library.recorder(for: skill)
-        let engine = RunEngine(steps: skill.definition.steps, mode: mode, performer: performer, wait: wait) { [weak self] event in
+        let engine = RunEngine(steps: skill.definition.steps, mode: mode, performer: performer, startingAt: index, wait: wait) { [weak self] event in
             self?.handle(event, record: record)
         }
         self.engine = engine
@@ -88,7 +88,7 @@ final class RunController: ObservableObject {
         let report = (["\(skill.name) · \(text)"] + steps.enumerated().map { "\($0.offset + 1). \($0.element.step): \($0.element.status). \($0.element.evidence)" })
             .joined(separator: "\n")
         return Receipt(skillName: skill.name, client: skill.client, missingSpend: false, report: report,
-                       rules: skill.rules, ranSteps: steps, outcome: text)
+                       rules: skill.rules, ranSteps: steps, outcome: text, skillID: skill.id)
     }
 
     static func status(_ status: StepOutcome.Status) -> String {

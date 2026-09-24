@@ -314,7 +314,16 @@ struct MainWindowView: View {
             ForEach(Array(receipt.steps.enumerated()), id: \.offset) { index, step in
                 evidence("\(index + 1). \(step.step)", step.status, step.evidence)
             }
-            Button("Back to skills") { ui.page = .skills }.buttonStyle(.bordered)
+            HStack {
+                // After fixing what stopped it, run again from that step without repeating the ones before.
+                if let index = receipt.resumeIndex, let skill = library.skills.first(where: { $0.id == receipt.skillID }),
+                   index < skill.definition.steps.count {
+                    primary("Run again from step \(index + 1)", symbol: "arrow.clockwise") {
+                        if runner.start(skill, mode: .run, from: index) { ui.selectedSkill = skill; ui.page = .skills }
+                    }.disabled(runner.isRunning)
+                }
+                Button("Back to skills") { ui.page = .skills }.buttonStyle(.bordered)
+            }
         }
     }
 

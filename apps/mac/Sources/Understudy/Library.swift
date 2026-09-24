@@ -71,6 +71,14 @@ struct Receipt: Codable, Identifiable {
     var ranSteps: [ReceiptStep]?
     /// For a real run: "Completed", "Blocked · needs you", or "Stopped".
     var outcome: String?
+    /// For a real run: the skill it ran, so it can be run again from where it stopped.
+    var skillID: UUID?
+
+    /// The step a stopped run can resume from: the first that didn't finish (1-based for people).
+    var resumeIndex: Int? {
+        guard let ranSteps, outcome != "Completed" else { return nil }
+        return ranSteps.firstIndex { $0.status != "Done" && !$0.status.hasPrefix("Skipped") }
+    }
 
     var isRun: Bool { ranSteps != nil }
     var status: String { isRun ? outcome ?? "Finished" : missingSpend ? "Needs input" : "Ready for your review" }

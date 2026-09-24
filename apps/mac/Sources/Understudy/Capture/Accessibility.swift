@@ -203,6 +203,66 @@ enum AX {
         return candidates.first { self.context(of: $0, name: name) == context }
     }
 
+    /// What a run found for a step's control.
+    enum Located {
+        case exact(AXUIElement)
+        /// Found by a similar name (e.g. "Bloom (Deluxe)" for "Bloom"), with the name it has now.
+        case similar(AXUIElement, String)
+        /// Several similar ones: it doesn't guess.
+        case ambiguous(Int)
+        case missing
+    }
+
+    /// `find`, then, if nothing matches exactly, one element of the same role (and context, if
+    /// recorded) whose name is clearly the same one changed a little. Never by position.
+    static func locate(in pid: pid_t, role: String?, name: String?, identifier: String?, context: String?) -> Located {
+        if let element = find(in: pid, role: role, name: name, identifier: identifier, context: context) { return .exact(element) }
+        guard let name, let role else { return .missing }
+        let app = AXUIElementCreateApplication(pid)
+        var queue = (attribute(app, kAXWindowsAttribute) as? [AXUIElement]) ?? []
+        var visited = 0, similar: [(AXUIElement, String)] = []
+        while !queue.isEmpty, visited < 8_000, similar.count < 5 {
+            let element = queue.removeFirst()
+            visited += 1
+            if string(element, kAXRoleAttribute) == role, let other = self.name(of: element), Matching.similar(name, other),
+               context == nil || self.context(of: element, name: other) == context {
+                similar.append((element, other))
+            }
+            queue += (attribute(element, kAXChildrenAttribute) as? [AXUIElement]) ?? []
+        }
+        if similar.count == 1 { return .similar(similar[0].0, similar[0].1) }
+        return similar.isEmpty ? .missing : .ambiguous(similar.count)
+    }
+
+    /// The window title and headings of the app's front window: what shows that a press led somewhere.
+    static func landmarks(pid: pid_t) -> [String] {
+        let app = AXUIElementCreateApplication(pid)
+        guard let window = attribute(app, kAXFocusedWindowAttribute).map({ $0 as! AXUIElement }) else { return [] }
+        var found = [string(window, kAXTitleAttribute, limit: 200)].compactMap { $0 }
+        var queue = [window], visited = 0
+        while !queue.isEmpty, visited < 4_000 {
+            let element = queue.removeFirst()
+            visited += 1
+            if string(element, kAXRoleAttribute) == "AXHeading",
+               let text = string(element, kAXTitleAttribute, limit: 200) ?? string(element, kAXDescriptionAttribute, limit: 200)
+                ?? texts(in: element, limit: 1, nodes: 6).first {
+                found.append(text)
+            }
+            queue += (attribute(element, kAXChildrenAttribute) as? [AXUIElement]) ?? []
+        }
+        return found
+    }
+
+    /// Whether `text` shows anywhere in the app's windows.
+    static func shows(_ text: String, pid: pid_t) -> Bool {
+        let needle = text.lowercased()
+        let windows = (attribute(AXUIElementCreateApplication(pid), kAXWindowsAttribute) as? [AXUIElement]) ?? []
+        return windows.contains { window in
+            texts(in: window, limit: 400, nodes: 5_000).contains { $0.lowercased().contains(needle) }
+                || (string(window, kAXTitleAttribute, limit: 300)?.lowercased().contains(needle) ?? false)
+        }
+    }
+
     static func focusedWindowTitle(pid: pid_t) -> String? {
         guard let window = attribute(AXUIElementCreateApplication(pid), kAXFocusedWindowAttribute) else { return nil }
         return string(window as! AXUIElement, kAXTitleAttribute, limit: 120)

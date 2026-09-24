@@ -91,10 +91,36 @@ struct RunChecks {
         engine.approve(); engine.skip(); engine.start(); engine.cancel()
         precondition(performer.performed == ["slow"] && events.filter { $0 == .ended(.cancelled) }.count == 1)
 
+        // Resuming from step 2 never repeats step 1, and says so in its result.
+        performer = FakePerformer()
+        engine = RunEngine(steps: [step("a"), step("b"), step("c")], mode: .run, performer: performer, startingAt: 1, wait: now) { _ in }
+        engine.start()
+        precondition(performer.performed == ["b", "c"] && engine.outcome == .completed)
+        precondition(engine.results[0].status == .skipped && engine.results[0].detail.contains("Not repeated"))
+
+        // Steps that act on an element wait for it instead of the recording's pause; keys keep a short one.
+        func withAction(_ action: String, after: String) -> SkillDefinition.Step {
+            var s = step("x", after: after); s.parameters["action"] = action; return s
+        }
+        precondition(RunEngine.pause(before: withAction("press", after: "4.0")) == 0)
+        precondition(RunEngine.pause(before: withAction("activate", after: "3.0")) == 0)
+        precondition(RunEngine.pause(before: withAction("keys", after: "4.0")) == 2)
+        precondition(RunEngine.pause(before: withAction("type", after: "0.6")) == 0.6)
+
+        // Similar names and results that appeared.
+        precondition(Matching.keyword("Bloom Album • Caligula's Horse") == "Bloom Album" && Matching.keyword("Bloom · Recents") == "Bloom")
+        precondition(Matching.similar("Bloom Album", "Bloom Album • Caligula's Horse") == false)   // same keyword: an exact match, not a fallback
+        precondition(Matching.similar("Bloom", "Bloom (Deluxe) • Caligula's Horse") && !Matching.similar("Play", "Playlist"))
+        precondition(Matching.similar("Liked Songs", "Liked Songs (1,680)") && !Matching.similar("Rust", "Rusty"))
+        precondition(!Matching.similar("Go", "Good") && !Matching.similar("Bloom", "Doom"))
+        precondition(Matching.appeared(after: "Bloom Album • Caligula's Horse", before: ["Your Library", "Liked Songs"], after: ["Your Library", "Bloom"]))
+        precondition(!Matching.appeared(after: "Bloom", before: ["Bloom"], after: ["Bloom"]))
+        precondition(!Matching.appeared(after: "Play", before: [], after: ["Pl"]))
+
         // An empty skill completes at once.
         engine = RunEngine(steps: [], mode: .run, performer: FakePerformer(), wait: now) { _ in }
         engine.start()
         precondition(engine.outcome == .completed)
-        print("PASS: ordered run with recorded pauses, approval, skip, unsupported and failed steps block, step by step, cancel with a late answer, empty skill")
+        print("PASS: resume without repeating, element steps wait instead of pausing, similar names, results that appeared, ordered run with pauses, approval, skip, unsupported and failed steps block, step by step, cancel with a late answer, empty skill")
     }
 }
