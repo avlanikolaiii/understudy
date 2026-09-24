@@ -19,6 +19,7 @@ final class ActionMonitor {
     private var lastCells: [pid_t: String] = [:]
     /// Apps whose spreadsheet selection is read shortly after a click or key; read at once on stop.
     private var pendingSelections: Set<pid_t> = []
+    private var lastWarm = Date.distantPast
 
     /// Text typed into one field. The field is fixed when typing starts, so a later change of
     /// focus can't move the text to another field, or out of a password field.
@@ -45,6 +46,11 @@ final class ActionMonitor {
         }) { monitors.append(monitor) }
         // Apps built on Electron show their contents to Accessibility once asked.
         NSWorkspace.shared.runningApplications.filter { $0.activationPolicy == .regular }.forEach(AX.reveal)
+        // Asking what's under the pointer as it moves lets apps built on Chromium have the exact
+        // element ready when the click comes (their first answer at a point is their whole page).
+        if let monitor = NSEvent.addGlobalMonitorForEvents(matching: .mouseMoved, handler: { _ in
+            MainActor.assumeIsolated { self.warm(at: NSEvent.mouseLocation) }
+        }) { monitors.append(monitor) }
         if let monitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown, handler: { event in
             MainActor.assumeIsolated { self.keyDown(event) }
         }) { monitors.append(monitor) }
@@ -78,17 +84,39 @@ final class ActionMonitor {
                             window: AX.focusedWindowTitle(pid: app.processIdentifier)))
     }
 
+    private func warm(at location: NSPoint) {
+        guard Date().timeIntervalSince(lastWarm) > 0.1 else { return }
+        lastWarm = Date()
+        _ = AX.element(at: Self.accessibilityPoint(location))
+    }
+
+    /// Accessibility measures from the top-left of the main screen; AppKit from the bottom-left.
+    private static func accessibilityPoint(_ location: NSPoint) -> CGPoint {
+        CGPoint(x: location.x, y: (NSScreen.screens.first?.frame.maxY ?? 0) - location.y)
+    }
+
     private func clicked(at location: NSPoint, count: Int) {
         flushTyping()
-        // Accessibility measures from the top-left of the main screen; AppKit from the bottom-left.
-        let top = NSScreen.screens.first?.frame.maxY ?? 0
-        guard let hit = AX.element(at: CGPoint(x: location.x, y: top - location.y)) else { return }
+        let point = Self.accessibilityPoint(location)
+        guard let hit = AX.element(at: point) else { return }
+        let t = clock(), current = take
+        // A large container means the app hadn't looked yet: ask again a moment later, and use
+        // the exact element. The position only finds what was clicked; it isn't recorded.
+        guard AX.isCoarse(hit) else { return record(click: hit, t: t, count: count) }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [self] in
+            guard take == current else { return }
+            let again = AX.element(at: point).flatMap { AX.pid(of: $0) == AX.pid(of: hit) ? $0 : nil } ?? hit
+            record(click: again, t: t, count: count)
+        }
+    }
+
+    private func record(click hit: AXUIElement, t: Double, count: Int) {
         let pid = AX.pid(of: hit)
         guard pid != getpid(), let app = NSRunningApplication(processIdentifier: pid) else { return }
         // What was clicked, and what finds it again (never where it was on screen).
         let element = AX.describeClicked(AX.control(from: hit))
         let hidden = element.name == nil && AX.engine(of: app) == .chromiumEmbedded && AX.hidesContents(app)
-        emit(RecordedAction(t: clock(), kind: .click, app: app.localizedName ?? "App", bundle: app.bundleIdentifier,
+        emit(RecordedAction(t: t, kind: .click, app: app.localizedName ?? "App", bundle: app.bundleIdentifier,
                             window: AX.focusedWindowTitle(pid: pid), element: element,
                             clicks: count > 1 ? count : nil, hiddenIn: hidden ? app.bundleIdentifier : nil))
         readSelection(pid: pid, after: 0.35)

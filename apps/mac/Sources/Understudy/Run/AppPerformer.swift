@@ -64,13 +64,21 @@ final class AppPerformer: StepPerformer {
 
     private func act(on step: SkillDefinition.Step, _ done: @escaping (StepOutcome) -> Void) {
         let label = step.target.title ?? step.target.identifier ?? "the control"
-        guard let app = frontApp(for: step) else {
-            return done(StepOutcome(.failed, .none, "\(step.parameters["app"] ?? "The app") isn't in front."))
+        // Pressing through Accessibility works whether or not the app is in front.
+        guard let app = step.target.app.flatMap({ NSRunningApplication.runningApplications(withBundleIdentifier: $0).first })
+                ?? frontApp(for: step) else {
+            return done(StepOutcome(.failed, .none, "\(step.parameters["app"] ?? "The app") isn't open."))
         }
         var found: AXUIElement?
         poll({ found = AX.find(in: app.processIdentifier, role: step.target.role, name: step.target.title,
                                identifier: step.target.identifier, context: step.parameters["context"]); return found != nil }) { _ in
             guard let element = found else {
+                // A toggle showing its other state ("Pause" where "Play" was recorded) means the
+                // step's result is already there: nothing to press.
+                if let name = step.target.title, let other = Self.toggles[name],
+                   AX.find(in: app.processIdentifier, role: step.target.role, name: other, identifier: nil, context: step.parameters["context"]) != nil {
+                    return done(StepOutcome(.done, .verified, "\(RecordedAction.quote(other)) is showing, so it's already done; nothing was pressed."))
+                }
                 return done(StepOutcome(.failed, .none, "Couldn't find \(RecordedAction.quote(label)) in \(app.localizedName ?? "the app")."))
             }
             if step.parameters["action"] == "focus" {
@@ -91,10 +99,14 @@ final class AppPerformer: StepPerformer {
     }
 
     private func type(_ step: SkillDefinition.Step, _ done: @escaping (StepOutcome) -> Void) {
-        let text = step.parameters["text"] ?? ""
-        guard let app = frontApp(for: step) else {
-            return done(StepOutcome(.failed, .none, "\(step.parameters["app"] ?? "The app") isn't in front."))
+        bringToFront(step) { [self] app in
+            guard let app else { return done(StepOutcome(.failed, .none, "\(step.parameters["app"] ?? "The app") couldn't be brought to the front.")) }
+            typeText(step, app, done)
         }
+    }
+
+    private func typeText(_ step: SkillDefinition.Step, _ app: NSRunningApplication, _ done: @escaping (StepOutcome) -> Void) {
+        let text = step.parameters["text"] ?? ""
         let source = CGEventSource(stateID: .combinedSessionState)
         let units = Array(text.utf16)
         // Unicode key events carry text directly, so any language and symbol types as recorded.
@@ -120,19 +132,38 @@ final class AppPerformer: StepPerformer {
         guard let (code, flags) = exact ?? Self.keyCode(for: keys) else {
             return done(StepOutcome(.failed, .none, "Understudy can't press \(keys) yet."))
         }
-        guard frontApp(for: step) != nil else {
-            return done(StepOutcome(.failed, .none, "\(step.parameters["app"] ?? "The app") isn't in front."))
+        bringToFront(step) { app in
+            guard app != nil else { return done(StepOutcome(.failed, .none, "\(step.parameters["app"] ?? "The app") couldn't be brought to the front.")) }
+            Self.post(code, flags)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                done(StepOutcome(.done, .notVerifiable, "Pressed \(keys). What it did can't be read back."))
+            }
         }
+    }
+
+    private static func post(_ code: CGKeyCode, _ flags: CGEventFlags) {
         let source = CGEventSource(stateID: .combinedSessionState)
         for down in [true, false] {
             let event = CGEvent(keyboardEventSource: source, virtualKey: code, keyDown: down)
             event?.flags = flags
             event?.post(tap: .cghidEventTap)
         }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-            done(StepOutcome(.done, .notVerifiable, "Pressed \(keys). What it did can't be read back."))
+    }
+
+    /// Keys and typing go to the app in front: if the step's app isn't, bring it forward first.
+    private func bringToFront(_ step: SkillDefinition.Step, then: @escaping (NSRunningApplication?) -> Void) {
+        if let front = frontApp(for: step) { return then(front) }
+        guard let bundle = step.target.app, let app = NSRunningApplication.runningApplications(withBundleIdentifier: bundle).first else {
+            return then(nil)
+        }
+        app.activate()
+        poll { NSWorkspace.shared.frontmostApplication?.processIdentifier == app.processIdentifier } then: { inFront in
+            then(inFront ? app : nil)
         }
     }
+
+    /// Controls that show their other state after they're pressed.
+    static let toggles = ["Play": "Pause", "Pause": "Play", "Mute": "Unmute", "Unmute": "Mute"]
 
     // MARK: Helpers
 

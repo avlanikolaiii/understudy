@@ -31,6 +31,22 @@ enum AX {
         return result == .success ? element : nil
     }
 
+    static func frame(of element: AXUIElement) -> CGRect? {
+        var origin = CGPoint.zero, size = CGSize.zero
+        guard let p = attribute(element, kAXPositionAttribute), let z = attribute(element, kAXSizeAttribute),
+              AXValueGetValue(p as! AXValue, .cgPoint, &origin), AXValueGetValue(z as! AXValue, .cgSize, &size) else { return nil }
+        return CGRect(origin: origin, size: size)
+    }
+
+    /// True when a hit test returned a large container rather than what was clicked. Apps built on
+    /// Chromium answer the first hit test at a point with their whole page, and the exact element
+    /// once they've looked (measured on Spotify: the second answer, a moment later, is exact).
+    static func isCoarse(_ element: AXUIElement) -> Bool {
+        guard let frame = frame(of: element), let window = attribute(element, kAXWindowAttribute).flatMap({ self.frame(of: $0 as! AXUIElement) }),
+              window.width * window.height > 0 else { return false }
+        return frame.width * frame.height >= 0.3 * window.width * window.height
+    }
+
     static func pid(of element: AXUIElement) -> pid_t {
         var pid: pid_t = 0
         AXUIElementGetPid(element, &pid)
