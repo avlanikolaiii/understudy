@@ -10,7 +10,7 @@ Understudy is a macOS companion that lives in the MacBook notch, with a menu bar
 - **Runtime:** Understudy runs steps itself through connectors and calls AI models (Claude Opus 5.5, GPT-5.6 Sol) only for steps that need judgment. It is not a plug-in or skill exporter for ChatGPT or Claude.
 - **First workflow:** the weekly client update (sheet figures → report from a template → tracker row → email draft awaiting approval).
 - **Initial customer hypothesis:** agencies and consultancies. This is a hypothesis, not validated demand.
-- **Status:** in development. Watch records real demonstrations (screen video and an action log, kept on the Mac). Learning and rehearsal are still simulated. The report engine is real but not wired into the app yet.
+- **Status:** in development. Watch records real demonstrations (screen video and an action log, kept on the Mac). Recorded steps run for real, by hand or on a trigger, without AI. AI learning and the sample report's rehearsal are still to come or simulated. The report engine is real but not wired into the app yet.
 
 ## Repository layout
 
@@ -35,6 +35,7 @@ Understudy is a macOS companion that lives in the MacBook notch, with a menu bar
 - **Auth** (`AppModel`): Supabase Auth with Google, Apple, and email link, using PKCE and the redirect `understudy://auth-callback`.
 - **Report engine** (`UnderstudyCore/ReportEngine.swift`): pure Foundation, using `Decimal`, and following `docs/product/report-spec.md`.
 - **Watch** (`WatchSession.swift`, `Capture/`): records a demonstration through a replaceable `CaptureSource`: `ScreenCapture` (ScreenCaptureKit video through macOS's picker, plus an Accessibility action log) on a Mac, `ScriptedCapture` in tests. Recordings are folders in `~/Library/Application Support/Understudy/recordings/`. See `docs/app/watch.md`.
+- **Run** (`Run/`, `UnderstudyCore/RunEngine.swift`, `StepsFromRecording.swift`, `Trigger.swift`): a recording becomes steps; `RunController` runs them through `AppPerformer` (open apps, press controls by name, type, keys; never the mouse), pausing for approval on sending or deleting, and saves a receipt. `Scheduler` starts skills on a schedule, an interval, an app opening, or a file arriving, after a 10-second countdown in the notch. See `docs/app/run.md`.
 - **Shortcut** (`KeyboardShortcut.swift`): a Carbon hot key (default ⌥ Space), remappable, that needs no Accessibility permission. It starts Watch; pressing it again stops Watch and opens the review.
 
 ## Build and test
