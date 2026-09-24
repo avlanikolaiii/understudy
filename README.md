@@ -56,7 +56,7 @@ understudy/
 
 ### Mac app
 
-Requires macOS 14 or later and the Xcode Command Line Tools.
+Building requires Swift 6.1 or later (Xcode 16.3+ or its Command Line Tools), because supabase-swift needs it. The built app runs on macOS 14 or later.
 
 ```bash
 apps/mac/scripts/bundle.sh

@@ -30,7 +30,7 @@ All notable changes to this project are recorded here. The format follows
 ### Quality
 - `qa/run.py`: one command runs the checks, simulated-user sessions on the real app (`--self-test`), website QA, and held-out evals. It draws a coverage graph and a trend report.
 - The report engine matches all four held-out weeks exactly, including the week with missing spend.
-- CI runs the full QA and a real first launch on macOS 14, 15, and 26 for every pull request.
+- CI builds the app once and runs that same bundle on fresh macOS 14, 15, and 26 machines for every pull request: simulated users plus a real first launch.
 
 ### Research and data
 - Synthetic agency fixtures (teaching weeks 0–3) and held-out evaluation weeks 4–7 with a SHA-256 manifest.
