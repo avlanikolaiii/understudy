@@ -429,6 +429,8 @@ footer .mark{font-size:20px;color:var(--ink)}
 
 /* ================= pre-launch site additions ================= */
 html,body{margin:0}
+/* Elements with display rules above must still disappear when hidden. */
+[hidden]{display:none!important}
 .nav a[aria-current="page"]{color:var(--ink);box-shadow:inset 0 -2px 0 var(--hl)}
 .bar-cta[aria-current="page"]{color:var(--ink)}
 .page-head{padding-block:clamp(40px,6vw,72px) 8px}

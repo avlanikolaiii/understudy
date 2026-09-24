@@ -5,10 +5,12 @@
   const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
   const KEY = "understudy-waitlist";
 
-  // Session storage only remembers this tab's signup, so the details step can follow it.
+  // Session storage remembers this tab's signup so the details step can follow it.
+  // If the browser blocks storage, the signup is still kept in memory for this page.
+  let memory = null;
   const store = {
-    get() { try { return JSON.parse(sessionStorage.getItem(KEY)) || null; } catch (e) { return null; } },
-    set(v) { try { sessionStorage.setItem(KEY, JSON.stringify(v)); } catch (e) {} }
+    get() { try { return JSON.parse(sessionStorage.getItem(KEY)) || memory; } catch (e) { return memory; } },
+    set(v) { memory = v; try { sessionStorage.setItem(KEY, JSON.stringify(v)); } catch (e) {} }
   };
 
   async function rpc(name, body) {
@@ -75,16 +77,15 @@
     $("#details-form").addEventListener("submit", async (e) => {
       e.preventDefault();
       const s = store.get(); const btn = $("#d-save"); const st = $("#d-status");
-      if (!s || !s.token) { setStatus(st, "Your answers are saved.", "ok"); return; }
+      if (!s || !s.token) { setStatus(st, "Join the list first, then add your answers.", "err"); return; }
       btn.disabled = true; setStatus(st, "Saving…");
       try {
-        const ok = await rpc("add_waitlist_details", {
+        await rpc("add_waitlist_details", {
           p_email: s.email, p_token: s.token,
           p_work: $("#d-work").value, p_mac: $("#d-mac").value, p_task: $("#d-task").value.trim().slice(0, 1200)
         });
         store.set(Object.assign({}, s, { details: true, token: null }));
-        setStatus(st, ok ? "Saved. Thank you, this shapes what we build first."
-                         : "We already have answers for this email. Thank you.", "ok");
+        setStatus(st, "Saved. Thank you, this shapes what we build first.", "ok");
         $("#details-form").querySelectorAll("textarea,select,button").forEach((n) => { n.disabled = true; });
       } catch (err) { setStatus(st, errText(err), "err"); btn.disabled = false; }
     });
