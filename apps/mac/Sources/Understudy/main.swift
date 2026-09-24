@@ -3,26 +3,18 @@ import Combine
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
-    // One set of objects, shared by the main window and the notch. With --self-test they use a
-    // temporary library, no server, a test clock, and faster notch timings (see SelfTest.swift).
-    let selfTest = SelfTestOptions(arguments: CommandLine.arguments)
-    lazy var model = AppModel(config: selfTest == nil ? AppConfig.load() : nil)
-    lazy var library = SkillLibrary(auth: model, file: selfTest?.libraryFile ?? .standard)
-    lazy var watch = selfTest.map { options in WatchSession(now: { options.clock.now() }) } ?? WatchSession()
-    lazy var activity = selfTest.map { NotchActivity(watch: watch, sleep: $0.sleep) } ?? NotchActivity(watch: watch)
-    let ui = WorkspaceState()
+    lazy var env = AppEnvironment(arguments: CommandLine.arguments)
     private(set) var notch: NotchController!
     private var statusItem: NSStatusItem!
-    private let shortcuts = ShortcutManager()
     private var shortcutSettings: ShortcutSettingsController!
     private var shortcutObservation: AnyCancellable?
     private var workspace: WorkspaceController!
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        shortcutSettings = ShortcutSettingsController(manager: shortcuts)
-        workspace = WorkspaceController(auth: model, library: library, ui: ui, watch: watch, activity: activity,
+        shortcutSettings = ShortcutSettingsController(manager: env.shortcuts)
+        workspace = WorkspaceController(auth: env.model, library: env.library, ui: env.ui, watch: env.watch, activity: env.activity,
                                         openSettings: { [weak self] in self?.shortcutSettings.show() })
-        notch = NotchController(activity: activity, onTap: { [weak self] page in self?.workspace.show(page) })
+        notch = NotchController(activity: env.activity, onTap: { [weak self] page in self?.workspace.show(page) })
         installMainMenu()
 
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
@@ -41,24 +33,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(NSMenuItem(title: "Quit Understudy", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
         statusItem.menu = menu
 
-        shortcutObservation = shortcuts.objectWillChange.sink { [weak self, weak watchItem] _ in
+        shortcutObservation = env.shortcuts.objectWillChange.sink { [weak self, weak watchItem] _ in
             DispatchQueue.main.async {
                 guard let self else { return }
-                let label = self.shortcuts.shortcut.display
-                self.model.shortcutLabel = self.shortcuts.isActive ? label : "Shortcut unavailable"
-                watchItem?.title = self.shortcuts.isActive ? "Watch a Task (Simulated) · \(label)" : "Watch a Task (Simulated)"
+                let label = self.env.shortcuts.shortcut.display
+                self.env.model.shortcutLabel = self.env.shortcuts.isActive ? label : "Shortcut unavailable"
+                watchItem?.title = self.env.shortcuts.isActive ? "Watch a Task (Simulated) · \(label)" : "Watch a Task (Simulated)"
             }
         }
-        if let options = selfTest {
+        if let options = env.selfTest {
             // No global shortcut and no server: the test drives the same objects directly.
             Task { @MainActor in exit(await SelfTest(app: self, options: options).run()) }
             return
         }
-        shortcuts.start { [weak self] in self?.shortcutPressed() }
-        model.start()
+        env.shortcuts.start { [weak self] in self?.shortcutPressed() }
+        env.model.start()
         if CommandLine.arguments.contains("--notch-demo") {
             // Plays the landing page's hero sequence in the real notch, for side-by-side comparison.
-            activity.playDemo()
+            env.activity.playDemo()
         } else {
             workspace.show()
         }
@@ -118,29 +110,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// and opens the review in the main window.
     @objc func shortcutPressed() {
         // Stopping Watch always wins, even while a rehearsal or receipt is showing in the notch.
-        if watch.isPlaying {
-            ui.reviewWatch(watch)
+        if env.watch.isPlaying {
+            env.ui.reviewWatch(env.watch)
             workspace.show()
             return
         }
-        switch activity.mode {
+        switch env.activity.mode {
         case .watching:
-            ui.reviewWatch(watch)
+            env.ui.reviewWatch(env.watch)
             workspace.show()
         case .stopped:
             workspace.show(.teach)
         case .learned, .receipt:
-            activity.dismiss()
+            env.activity.dismiss()
         case .rehearsing:
             workspace.show(.results)
         case .idle, .demo:
-            ui.startWatch(watch)
+            env.ui.startWatch(env.watch)
         }
     }
 
     /// Email sign-in links and OAuth redirects arrive as understudy://auth-callback?...
     func application(_ application: NSApplication, open urls: [URL]) {
-        for url in urls { model.handle(url: url) }
+        for url in urls { env.model.handle(url: url) }
         workspace.show(.account)
     }
 }

@@ -25,7 +25,7 @@ struct PrototypeChecks {
         // Sample mode storage: round trip, and files from the earlier prototype still open.
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent("understudy-checks-\(UUID().uuidString)")
         defer { try? FileManager.default.removeItem(at: dir) }
-        let file = LocalLibraryFile(url: dir.appendingPathComponent("library.json"))
+        let file = LocalStore(url: dir.appendingPathComponent("library.json"))
         let empty = try file.load()
         precondition(empty == nil)
         try file.save(.init(skills: [.sample, skill], receipts: [missing]))
@@ -35,11 +35,21 @@ struct PrototypeChecks {
         let legacy = #"{"skills":[{"id":"6F9619FF-8B86-D011-B42D-00CF4FC964FF","name":"Weekly client update","client":"Norte Studio","rules":"x"}],"receipts":[]}"#
         try Data(legacy.utf8).write(to: file.url)
         let migrated = try file.load()
-        precondition(migrated?.skills[0].isSample == true)
+        precondition(migrated?.skills[0].isSample == true && migrated?.skills[0].rules == "x")
+        precondition(migrated?.skills[0].definition.simulated == true)
+        // Saving writes the current format; a file from a newer Understudy is refused, not overwritten.
+        try file.save(migrated!)
+        let saved = try JSONSerialization.jsonObject(with: Data(contentsOf: file.url)) as! [String: Any]
+        precondition(saved["version"] as? Int == LocalStore.Contents.currentVersion)
+        precondition(((saved["skills"] as! [[String: Any]])[0]["definition"] as! [String: Any])["schemaVersion"] as? Int == 1)
+        try Data(#"{"version":99,"skills":[],"receipts":[]}"#.utf8).write(to: file.url)
+        var newer = false
+        do { _ = try file.load() } catch { newer = true }
+        precondition(newer)
         try Data("not json".utf8).write(to: file.url)
         var unreadable = false
         do { _ = try file.load() } catch { unreadable = true }
         precondition(unreadable)
-        print("PASS: complete sample, missing-data propagation, simulation disclosure, receipt persistence, and sample-mode storage")
+        print("PASS: complete sample, missing-data propagation, simulation disclosure, receipt persistence, and versioned sample-mode storage")
     }
 }

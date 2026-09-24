@@ -1,8 +1,9 @@
 // Held-out evaluation of ReportEngine: the only code allowed to read data/evaluation/.
 // For each held-out week it compares the deterministic parts of the report (title, date line,
 // and every numbers-table line) with the expected report, and prints scores only, never content.
-//   swiftc apps/mac/Sources/Understudy/ReportEngine.swift qa/eval-holdout.swift -o /tmp/eval && /tmp/eval [out.json]
+//   Run by qa/run.py, which links it with UnderstudyCore.
 import Foundation
+import UnderstudyCore
 
 @main
 struct EvalHoldout {
