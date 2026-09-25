@@ -18,7 +18,7 @@ struct NotchRow: Identifiable, Equatable {
 /// after it are still simulated and say so.
 @MainActor
 final class NotchActivity: ObservableObject {
-    enum Mode: Equatable { case idle, watching, stopped, learned, rehearsing, scheduled, running, receipt, demo }
+    enum Mode: Equatable { case idle, watching, stopped, learned, rehearsing, scheduled, running, receipt, demo, menu }
     enum Dot: Equatable { case steady, pulse, rehearse }
 
     @Published private(set) var mode: Mode = .idle
@@ -63,7 +63,7 @@ final class NotchActivity: ObservableObject {
         case .learned: .skills
         case .running, .scheduled: .skills
         case .rehearsing, .receipt: .results
-        case .idle, .demo: .home
+        case .idle, .demo, .menu: .home
         }
     }
 
@@ -180,6 +180,20 @@ final class NotchActivity: ObservableObject {
                 row("Email", "not sent", end: "—"),
              ], footer: "Simulated receipt · sample data")
         later(token, 15) { $0.endOverlay() }
+    }
+
+    // MARK: Menu
+
+    /// Opens the menu out of the notch (clicked at rest). Anything that happens next (Watch, a
+    /// countdown, a run) takes the notch over from it.
+    func showMenu() {
+        guard mode == .idle else { return }
+        _ = beginOverlay()
+        show(.menu, label: "Understudy", meta: "", rows: [], footer: "")
+    }
+
+    func hideMenu() {
+        if mode == .menu { endOverlay() }
     }
 
     /// Clears a New skill or Receipt strip. Watch and rehearsal keep going.

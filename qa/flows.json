@@ -144,6 +144,11 @@
           "id": "launch.shortcut",
           "label": "Skill · has a shortcut",
           "suite": "self-test"
+        },
+        {
+          "id": "notch.menu",
+          "label": "Notch · Menu",
+          "suite": "self-test"
         }
       ],
       "edges": [
@@ -409,8 +414,28 @@
         },
         {
           "action": "notchMenuRun",
-          "from": "notch.idle",
+          "from": "notch.menu",
           "to": "trigger.countdown"
+        },
+        {
+          "action": "notchTap",
+          "from": "notch.idle",
+          "to": "notch.menu"
+        },
+        {
+          "action": "notchMenuOpen",
+          "from": "notch.menu",
+          "to": "window.main.open"
+        },
+        {
+          "action": "notchMenuTeach",
+          "from": "notch.menu",
+          "to": "teach.step1"
+        },
+        {
+          "action": "notchTap",
+          "from": "notch.menu",
+          "to": "notch.idle"
         }
       ]
     },

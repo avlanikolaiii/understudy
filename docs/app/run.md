@@ -71,7 +71,7 @@ Some apps have their own commands on the Mac. A step can use one instead of clic
 ## Starting a skill from anywhere
 
 - **A shortcut per skill:** in Skills, under the run buttons, **Set shortcut** and press the keys (for example ⌥1). It must include ⌘, ⌥, or ⌃. It can't be the Watch shortcut or another skill's. Pressing it runs the skill at once. Shortcuts are kept on this Mac.
-- **The notch menu:** click the notch while it's at rest to get a menu of the skills with steps, plus **Open Understudy**. A skill chosen there counts down for 10 seconds first, so a stray click can be undone.
+- **The notch menu:** click the notch while it's at rest and it opens into a menu of the skills with steps, as tiles, plus **Teach** and **Open Understudy** (see [interface-prototype.md](interface-prototype.md)). A skill chosen there counts down for 10 seconds first, so a stray click can be undone.
 - **Links:** `open "understudy://run?skill=Play%20Bloom"` from Terminal, Shortcuts, Raycast, or Alfred. `skill` is the skill's name or id. Any other query items fill its values, for example `&album=Bloom`. A run started by a link always counts down first, because another app sent it. A link to a skill that doesn't exist runs nothing, and the notch says so.
 - **Notifications:** when a run ends, or waits for your OK, macOS shows a notification (Understudy asks for permission the first time). Clicking it opens the receipt, or the run that waits.
 

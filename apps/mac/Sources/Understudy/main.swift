@@ -20,10 +20,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             guard let self else { return }
             // During the countdown before a triggered run, a click cancels that run.
             if self.env.activity.mode == .scheduled { return self.env.scheduler.cancelPending() }
-            // At rest, a click offers the skills to run (the self-test can't click a menu).
-            if self.env.activity.mode == .idle, self.env.selfTest == nil, self.showSkillMenu() { return }
             self.workspace.show(page)
+        }, onRest: { [weak self] in
+            // At rest, a click opens the menu out of the notch.
+            self?.showSkillMenu()
         })
+        notch.menu.choose = { [weak self] id in
+            guard let self, let skill = self.env.library.skills.first(where: { $0.id == id }) else { return }
+            self.env.activity.hideMenu()
+            self.runFromMenu(skill)
+        }
+        notch.menu.openApp = { [weak self] in
+            self?.env.activity.hideMenu()
+            self?.workspace.show()
+        }
+        notch.menu.teach = { [weak self] in
+            self?.env.activity.hideMenu()
+            self?.workspace.teachSkill()
+        }
         installMainMenu()
 
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
@@ -155,7 +169,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             workspace.show(.skills)
         case .scheduled:
             env.scheduler.cancelPending()
-        case .idle, .demo:
+        case .idle, .demo, .menu:
+            env.activity.hideMenu()
             env.ui.startWatch(env.watch)
             // If Watch can't start (e.g. no Accessibility access), show why.
             if env.watch.problem != nil { workspace.show() }
@@ -217,29 +232,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Chosen from the notch's menu: counts down like a trigger, so a stray click can be undone.
     func runFromMenu(_ skill: Skill) { env.scheduler.fire(skill, triggered: false) }
 
-    /// The skills that can run, under the notch. Returns false when there are none.
-    private func showSkillMenu() -> Bool {
-        let runnable = env.library.skills.filter { !$0.definition.steps.isEmpty }
-        guard !runnable.isEmpty else { return false }
-        let menu = NSMenu()
-        for skill in runnable {
-            let shortcut = env.skillShortcuts.shortcuts[skill.id].map { "   \($0.display)" } ?? ""
-            let item = NSMenuItem(title: "Run \(skill.name)\(shortcut)", action: #selector(runFromMenuItem(_:)), keyEquivalent: "")
-            item.target = self
-            item.representedObject = skill.id
-            menu.addItem(item)
+    /// Opens the menu out of the notch with the skills that can run, newest first.
+    private func showSkillMenu() {
+        notch.menu.items = env.library.skills.filter { !$0.definition.steps.isEmpty }.map { skill in
+            let trigger = skill.definition.trigger
+            let caption = env.skillShortcuts.shortcuts[skill.id]?.display.replacingOccurrences(of: " ", with: "")
+                ?? (trigger.kind == .manual ? "\(skill.definition.steps.count) steps" : trigger.summary)
+            return NotchMenu.Item(id: skill.id, name: skill.name, caption: caption,
+                                  bundle: skill.definition.steps.lazy.compactMap(\.target.app).first)
         }
-        menu.addItem(.separator())
-        let open = NSMenuItem(title: "Open Understudy", action: #selector(openWorkspace), keyEquivalent: "")
-        open.target = self
-        menu.addItem(open)
-        menu.popUp(positioning: nil, at: NSEvent.mouseLocation, in: nil)
-        return true
-    }
-
-    @objc private func runFromMenuItem(_ item: NSMenuItem) {
-        guard let id = item.representedObject as? UUID, let skill = env.library.skills.first(where: { $0.id == id }) else { return }
-        runFromMenu(skill)
+        env.activity.showMenu()
     }
 }
 

@@ -10,6 +10,10 @@ enum NotchStyle {
     static let rehearse = Color(red: 0.561, green: 0.722, blue: 1.0)     // #8FB8FF
     static let script = Font.custom("Courier New", size: 12)
     static let openWidth: CGFloat = 440
+    static let menuWidth: CGFloat = 560
+    /// The outward curves where the shape meets the top edge, like the hardware notch's.
+    static let openEar: CGFloat = 12
+    static let hoverEar: CGFloat = 6
     static let closedRadius: CGFloat = 13
     static let openRadius: CGFloat = 22
     /// The page's `cubic-bezier(.3,.9,.3,1)` over 0.5 s, as a spring.
@@ -51,10 +55,16 @@ struct NotchDot: View {
     }
 }
 
-/// A black shape around the notch: a small pill when idle, the live strip when something is happening.
+/// A black shape around the notch. At rest it's exactly the camera housing's size, so only the
+/// hardware shows; under the pointer it widens a little and shows the dot. It opens into the live
+/// strip when something is happening, and into the menu when clicked.
+///
+/// The black is pure #000000 and opaque: no material, tint, or shadow. On an LCD the backlight
+/// still lights it faintly, which is why it stays hidden behind the hardware at rest.
 struct NotchLiveView: View {
     @ObservedObject var activity: NotchActivity
     @ObservedObject var state: NotchState
+    @ObservedObject var menu: NotchMenu
     let notchSize: CGSize
     let hasNotch: Bool
     let onTap: () -> Void
@@ -62,20 +72,29 @@ struct NotchLiveView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var open: Bool { state.expanded }
+    private var isMenu: Bool { activity.mode == .menu }
     private var bandHeight: CGFloat { hasNotch ? notchSize.height : 30 }
-    private var pillWidth: CGFloat { hasNotch ? notchSize.width + (state.hovering ? 44 : 30) * 2 : 200 }
+    /// At rest: the housing exactly. Under the pointer: room for the dot beside it.
+    private var pillWidth: CGFloat { hasNotch ? notchSize.width + (state.hovering ? 64 : 0) : 200 }
+    private var openWidth: CGFloat { isMenu ? NotchStyle.menuWidth : NotchStyle.openWidth }
+    private var ear: CGFloat { !hasNotch ? 0 : open ? NotchStyle.openEar : state.hovering ? NotchStyle.hoverEar : 0 }
     /// The space beside the camera housing on each side, when open.
-    private var wing: CGFloat { hasNotch ? (NotchStyle.openWidth - notchSize.width) / 2 - 16 : .infinity }
+    private var wing: CGFloat { hasNotch ? (openWidth - notchSize.width) / 2 - 16 : .infinity }
 
     var body: some View {
-        let shape = UnevenRoundedRectangle(bottomLeadingRadius: open ? NotchStyle.openRadius : NotchStyle.closedRadius,
-                                           bottomTrailingRadius: open ? NotchStyle.openRadius : NotchStyle.closedRadius)
+        let shape = NotchShape(ear: ear, bottom: open ? NotchStyle.openRadius : NotchStyle.closedRadius)
         VStack(alignment: .leading, spacing: 0) {
             head.frame(height: bandHeight)
-            if open { content.transition(.opacity) }
+            if open {
+                Group {
+                    if isMenu { NotchMenuBody(menu: menu) } else { content }
+                }
+                .transition(.opacity)
+            }
         }
-        .padding(.horizontal, open ? 16 : 12)
-        .frame(width: open ? NotchStyle.openWidth : pillWidth, alignment: .top)
+        .padding(.horizontal, open ? 16 : state.hovering ? 12 : 0)
+        .frame(width: open ? openWidth : pillWidth, alignment: .top)
+        .padding(.horizontal, ear)
         .background(shape.fill(Color.black))
         .clipShape(shape)
         .contentShape(shape)
@@ -87,14 +106,16 @@ struct NotchLiveView: View {
         .environment(\.colorScheme, .dark)
         .accessibilityElement(children: .combine)
         .accessibilityLabel(accessibilityText)
-        .accessibilityHint("Opens Understudy")
+        .accessibilityHint(activity.mode == .idle ? "Shows your skills" : "Opens Understudy")
         .accessibilityAddTraits(.isButton)
         .accessibilityAction(.default) { onTap() }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
 
     @ViewBuilder private var head: some View {
-        if open {
+        if open && isMenu {
+            NotchMenuHeader(menu: menu, dot: activity.dot, wing: wing, gap: hasNotch ? notchSize.width : 8, space: space)
+        } else if open {
             HStack(spacing: 0) {
                 HStack(spacing: 8) {
                     NotchDot(style: activity.dot).matchedGeometryEffect(id: "dot", in: space)
@@ -110,6 +131,7 @@ struct NotchLiveView: View {
             HStack {
                 Spacer()
                 NotchDot(style: activity.dot).matchedGeometryEffect(id: "dot", in: space)
+                    .opacity(state.hovering || !hasNotch ? 1 : 0)
             }
         }
     }

@@ -5,7 +5,12 @@ This is a clickable native Mac app. It is not a working demonstration-learning e
 ## One app, two surfaces (since 2026-09-23 evening)
 
 - **Main window** is the home: Home, Teach a skill, Skills, Receipts, and Account (sign-in).
-- **The notch** is the live companion, styled and animated like the landing page's hero demo. The pill has a glowing dot. It springs open into a strip with a label, a timer, and the last 4 steps: Watching (pulsing dot), New skill, Rehearsing (blue dot, read-only), and Receipt. It never asks for sign-in or typing.
+- **The notch** is the live companion, styled and animated like the landing page's hero demo. It is pure black (#000000, opaque, no material or tint).
+  - **At rest,** it's exactly the camera housing's size, so only the hardware shows. On an LCD like the MacBook Air's, black pixels are still faintly backlit; hiding behind the housing is what keeps the rest state truly black.
+  - **Under the pointer,** it widens a little and shows the glowing dot. Wherever the shape is wider than the housing, its top corners curve outward into the screen edge, like the hardware notch.
+  - **Clicked at rest,** it springs open into a menu: *Understudy* beside the camera, **+** (teach a skill) and the window button (open Understudy) on the other side, and the skills with steps as tiles (the app's icon, the name, and the shortcut, trigger, or step count). Up to ten tiles show, in rows of five; more are a **+N** tile away in the app. A tile runs its skill after the 10-second countdown. The menu closes when the pointer leaves it, on a click anywhere else, or on a click on its background.
+  - It springs open into a strip with a label, a timer, and the last 4 steps: Watching (pulsing dot), New skill, Rehearsing (blue dot, read-only), and Receipt. Clicking a strip opens its page in the main window.
+  - It never asks for sign-in or typing.
 - **One data layer** (`SkillLibrary`): before sign-in it runs in **Sample mode**, saved on this Mac in the same JSON file as before, so old data carries over. After sign-in, skills and receipts come from the Supabase account. Receipts need `supabase/migrations/0002_receipt_details.sql`.
 - The shortcut (default Option-Space) follows the page's story: press it once to start Watch, and press it again to stop and open the review.
 - `open apps/mac/build/Understudy.app --args --notch-demo` plays the landing page's full sequence in the real notch, labeled "Concept demonstration".

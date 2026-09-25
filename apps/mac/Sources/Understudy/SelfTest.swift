@@ -160,6 +160,13 @@ final class SelfTest {
         app.env.activity.dismiss()
         await pump(settle * 2)
         snapshot(notchWindow, name: "notch-idle")
+        await waitUntil(4) { self.app.env.activity.mode == .idle }
+        app.notch.tap()
+        await waitUntil(2) { self.app.env.activity.mode == .menu }
+        await pump(settle)
+        snapshot(notchWindow, name: "notch-menu")
+        app.env.activity.hideMenu()
+        await pump(settle)
         app.openSettings()
         await pump(250)
         checkSettingsWindow()
@@ -243,7 +250,10 @@ final class SelfTest {
                 }
             }
         }
-        if colors.count < 3 { fail("screen.renders", "\(name): rendered blank (\(colors.count) colors)") }
+        if name == "notch-idle" {
+            // At rest the notch is the camera housing's exact size and pure black, so only the hardware shows.
+            if colors != [0] { fail("notch.idleBlack", "notch-idle: at rest the notch must be pure black (\(colors.count) colors)") }
+        } else if colors.count < 3 { fail("screen.renders", "\(name): rendered blank (\(colors.count) colors)") }
         if let png = rep.representation(using: .png, properties: [:]) {
             try? png.write(to: options.out.appendingPathComponent("\(name).png"))
             snapshots.append(name)
@@ -295,9 +305,25 @@ final class SelfTest {
                 always.append(("pressSkillShortcut", { await self.pressSkillShortcut(skill) }))
             }
             always.append(("runLink", { await self.runFromOutside(skill, link: true) }))
-            if app.notch.hasNotch || app.notch.isExpanded, activity.mode == .idle {
+        }
+        // The menu out of the notch: run a skill from a tile, open the app, teach, or close it.
+        if activity.mode == .menu {
+            let menu = app.notch.menu
+            if let item = menu.items.isEmpty ? nil : rng.pick(menu.items), let skill = library.skills.first(where: { $0.id == item.id }) {
                 always.append(("notchMenuRun", { await self.runFromOutside(skill, link: false) }))
             }
+            always.append(("notchMenuOpen", {
+                menu.openApp()
+                await self.pump(30)
+                self.expect(self.mainWindow?.isVisible == true && self.app.env.activity.mode != .menu, "menu.opensApp",
+                            "Open Understudy in the notch menu shows the main window and closes the menu")
+            }))
+            always.append(("notchMenuTeach", {
+                menu.teach()
+                await self.pump(30)
+                self.expect(self.app.env.activity.mode != .menu && self.app.env.ui.page == .teach, "menu.teaches",
+                            "Teach a skill in the notch menu opens Teach and closes the menu")
+            }))
         }
         if rng.chance(3) { always.append(("runLinkUnknown", { await self.runUnknownLink() })) }
         // Accessibility access can be turned off in System Settings at any time (rarely), and a
@@ -458,6 +484,28 @@ final class SelfTest {
 
     private func tapNotch() async {
         let expected = app.env.activity.page
+        switch app.env.activity.mode {
+        case .idle:
+            // At rest, a click opens the menu with every skill that can run.
+            app.notch.tap()
+            await pump(30)
+            let runnable = app.env.library.skills.filter { !$0.definition.steps.isEmpty }.map(\.id)
+            if app.env.activity.mode == .menu {
+                expect(app.notch.menu.items.map(\.id) == runnable && app.notch.isExpanded, "menu.listsSkills",
+                       "the notch menu opens and lists every skill with steps")
+            } else {
+                // Something else (a countdown, Watch) took the notch over right after the click.
+                expect(app.env.activity.mode != .idle, "menu.opens", "clicking the notch at rest opens its menu")
+            }
+            return
+        case .menu:
+            app.notch.tap()
+            await pump(30)
+            expect(app.env.activity.mode != .menu, "menu.closesOnClick", "clicking the open menu's background closes it")
+            return
+        default:
+            break
+        }
         if app.env.activity.mode == .scheduled, let counting = app.env.scheduler.pending {
             // During the countdown before a triggered run, a click cancels it. (Another queued
             // skill may start its own countdown next.)
@@ -728,7 +776,9 @@ final class SelfTest {
                 + skill.variables.map { URLQueryItem(name: $0, value: "value-\(rng.int(1...9))") }
             app.application(NSApp, open: [parts.url!])
         } else {
-            app.runFromMenu(skill)
+            // A tile in the menu out of the notch.
+            app.notch.menu.choose(skill.id)
+            expect(app.env.activity.mode != .menu, "menu.closesOnChoice", "choosing a skill closes the notch menu")
         }
         // Queued for the countdown at once (never started directly), when nothing else is going on.
         if !wasRunning && !watching && !wasPending {
@@ -880,6 +930,9 @@ final class SelfTest {
         expect(activity.rows.count <= 4, "notch.rowCap", "the notch shows at most 4 rows")
         switch activity.mode {
         case .idle: break
+        case .menu:
+            // The menu is real (it runs real skills) and shows no simulated content.
+            expect(activity.rows.isEmpty && app.notch.isExpanded, "menu.shape", "the notch menu is open and shows only its own content")
         case .watching, .stopped:
             expect(activity.footer == NotchActivity.watchFooter, "notch.honestLabel", "Watch must say it records on this Mac, never passwords")
         case .learned where activity.footer == NotchActivity.learnedFooter:
@@ -917,7 +970,7 @@ final class SelfTest {
     /// The notch reacts to a state change on the next pass of the run loop, so a mismatch gets up
     /// to 100 ms to settle (well under what a person notices) before it counts as a failure.
     private func checkNotchOpenness() async {
-        let active: [NotchActivity.Mode] = [.watching, .learned, .rehearsing, .scheduled, .running, .receipt, .demo]
+        let active: [NotchActivity.Mode] = [.watching, .learned, .rehearsing, .scheduled, .running, .receipt, .demo, .menu]
         func mismatch(_ mode: NotchActivity.Mode) -> Bool {
             (mode == .idle && app.notch.isExpanded) || (active.contains(mode) && !app.notch.isExpanded)
         }

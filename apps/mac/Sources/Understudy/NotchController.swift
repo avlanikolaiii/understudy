@@ -24,6 +24,10 @@ final class NotchHostingView<Content: View>: NSHostingView<Content> {
 final class NotchController: NSObject {
     private let activity: NotchActivity
     private let state = NotchState()
+    /// What the menu shows, filled by the app when it opens.
+    let menu = NotchMenu()
+    private var outsideClicks: [Any] = []
+    private var closeWork: DispatchWorkItem?
     private let panel: NotchPanel
     private var hosting: NotchHostingView<NotchLiveView>!
     private var bag = Set<AnyCancellable>()
@@ -35,7 +39,8 @@ final class NotchController: NSObject {
     let hasNotch: Bool
     private let notchSize: CGSize
 
-    init(activity: NotchActivity, onTap: @escaping (PrototypePage) -> Void) {
+    /// `onTap` opens the page for what the strip shows; `onRest` is a click while nothing is shown.
+    init(activity: NotchActivity, onTap: @escaping (PrototypePage) -> Void, onRest: @escaping () -> Void) {
         self.activity = activity
         let screens = NSScreen.screens
         let notched = screens.first { $0.safeAreaInsets.top > 0 }
@@ -64,11 +69,14 @@ final class NotchController: NSObject {
 
         handleTap = { [weak activity] in
             guard let activity else { return }
+            // A click on the open menu's background closes it; at rest, a click opens it.
+            if activity.mode == .menu { return activity.hideMenu() }
+            if activity.mode == .idle { return onRest() }
             let page = activity.page
             activity.dismiss()
             onTap(page)
         }
-        let root = NotchLiveView(activity: activity, state: state, notchSize: notchSize, hasNotch: hasNotch,
+        let root = NotchLiveView(activity: activity, state: state, menu: menu, notchSize: notchSize, hasNotch: hasNotch,
                                  onTap: { [weak self] in self?.handleTap() })
         hosting = NotchHostingView(rootView: root)
         panel.contentView = hosting
@@ -80,6 +88,10 @@ final class NotchController: NSObject {
         activity.objectWillChange.merge(with: state.objectWillChange)
             .debounce(for: .milliseconds(15), scheduler: RunLoop.main)
             .sink { [weak self] _ in self?.fit() }
+            .store(in: &bag)
+        // The menu closes a moment after the pointer leaves it (coming back keeps it open).
+        state.$hovering.removeDuplicates().receive(on: RunLoop.main)
+            .sink { [weak self] hovering in self?.hoverChanged(hovering) }
             .store(in: &bag)
 
         fit()
@@ -95,7 +107,7 @@ final class NotchController: NSObject {
     /// The strip as SwiftUI draws it right now, at the panel's size. Used by the self-test,
     /// because copying a non-opaque panel's backing store doesn't match what's on screen.
     func render() -> NSBitmapImageRep? {
-        let view = NotchLiveView(activity: activity, state: state, notchSize: notchSize, hasNotch: hasNotch, onTap: {})
+        let view = NotchLiveView(activity: activity, state: state, menu: menu, notchSize: notchSize, hasNotch: hasNotch, onTap: {})
             .frame(width: panel.frame.width, height: panel.frame.height)
         let renderer = ImageRenderer(content: view)
         renderer.scale = 2
@@ -106,6 +118,7 @@ final class NotchController: NSObject {
 
     private func modeChanged(_ mode: NotchActivity.Mode) {
         hideWork?.cancel()
+        watchOutsideClicks(mode == .menu)
         setExpanded(mode != .idle)
         if mode == .stopped {
             // A stopped Watch waits in the main window. Tuck the strip away after a moment.
@@ -120,6 +133,33 @@ final class NotchController: NSObject {
         if open && !hasNotch { panel.orderFrontRegardless() }
         withAnimation(reduceMotion ? nil : NotchStyle.spring) { state.expanded = open }
         fit()
+    }
+
+    // MARK: Menu
+
+    private func hoverChanged(_ hovering: Bool) {
+        closeWork?.cancel()
+        guard !hovering, activity.mode == .menu else { return }
+        let work = DispatchWorkItem { [weak self] in self?.activity.hideMenu() }
+        closeWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.7, execute: work)
+    }
+
+    /// While the menu is open, a click anywhere else (another app, or Understudy's window) closes it.
+    private func watchOutsideClicks(_ on: Bool) {
+        outsideClicks.forEach(NSEvent.removeMonitor)
+        outsideClicks = []
+        guard on else { return }
+        let close = { [weak self] in MainActor.assumeIsolated { self?.activity.hideMenu() } }
+        if let global = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown], handler: { _ in close() }) {
+            outsideClicks.append(global)
+        }
+        if let local = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown], handler: { [weak self] event in
+            if event.window !== self?.panel { close() }
+            return event
+        }) {
+            outsideClicks.append(local)
+        }
     }
 
     // MARK: Geometry
