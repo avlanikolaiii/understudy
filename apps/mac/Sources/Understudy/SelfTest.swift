@@ -307,18 +307,20 @@ final class SelfTest {
             always.append(("runLink", { await self.runFromOutside(skill, link: true) }))
         }
         // The menu out of the notch: run a skill from a tile, open the app, teach, or close it.
+        // While it's open it's what the person looks at, so these count as on screen (below).
+        var menuActions: [Action] = []
         if activity.mode == .menu {
             let menu = app.notch.menu
             if let item = menu.items.isEmpty ? nil : rng.pick(menu.items), let skill = library.skills.first(where: { $0.id == item.id }) {
-                always.append(("notchMenuRun", { await self.runFromOutside(skill, link: false) }))
+                menuActions.append(("notchMenuRun", { await self.runFromOutside(skill, link: false) }))
             }
-            always.append(("notchMenuOpen", {
+            menuActions.append(("notchMenuOpen", {
                 menu.openApp()
                 await self.pump(30)
                 self.expect(self.mainWindow?.isVisible == true && self.app.env.activity.mode != .menu, "menu.opensApp",
                             "Open Understudy in the notch menu shows the main window and closes the menu")
             }))
-            always.append(("notchMenuTeach", {
+            menuActions.append(("notchMenuTeach", {
                 menu.teach()
                 await self.pump(30)
                 self.expect(self.app.env.activity.mode != .menu && self.app.env.ui.page == .teach, "menu.teaches",
@@ -335,7 +337,7 @@ final class SelfTest {
         if app.notch.hasNotch || app.notch.isExpanded { always.append(("notchTap", { await self.tapNotch() })) }
 
         // What the main window offers on the current page. Nothing here while the window is closed.
-        var onScreen: [Action] = []
+        var onScreen: [Action] = menuActions
         if windowOpen {
             onScreen.append(("nav", { ui.page = self.rng.pick(PrototypePage.allCases) }))
             onScreen.append(("toolbarTeach", { ui.showTeaching(watch: watch) }))
@@ -484,10 +486,12 @@ final class SelfTest {
 
     private func tapNotch() async {
         let expected = app.env.activity.page
-        switch app.env.activity.mode {
+        // A tucked-away notch (at rest, or a stopped Watch after its strip folded) opens the menu.
+        let tucked = !app.notch.isExpanded && app.env.activity.canShowMenu
+        switch tucked ? .idle : app.env.activity.mode {
         case .idle:
             // At rest, a click opens the menu with every skill that can run.
-            app.notch.tap()
+            app.notch.click()
             await pump(30)
             let runnable = app.env.library.skills.filter { !$0.definition.steps.isEmpty }.map(\.id)
             if app.env.activity.mode == .menu {
@@ -495,11 +499,12 @@ final class SelfTest {
                        "the notch menu opens and lists every skill with steps")
             } else {
                 // Something else (a countdown, Watch) took the notch over right after the click.
-                expect(app.env.activity.mode != .idle, "menu.opens", "clicking the notch at rest opens its menu")
+                expect(app.env.activity.mode != .idle && app.env.activity.mode != .stopped, "menu.opens",
+                       "clicking the notch at rest opens its menu")
             }
             return
         case .menu:
-            app.notch.tap()
+            app.notch.click()
             await pump(30)
             expect(app.env.activity.mode != .menu, "menu.closesOnClick", "clicking the open menu's background closes it")
             return
@@ -509,14 +514,14 @@ final class SelfTest {
         if app.env.activity.mode == .scheduled, let counting = app.env.scheduler.pending {
             // During the countdown before a triggered run, a click cancels it. (Another queued
             // skill may start its own countdown next.)
-            app.notch.tap()
+            app.notch.click()
             await pump(10)
             expect(app.env.scheduler.pending?.id != counting.id && !(app.env.runner.isRunning && app.env.runner.skill?.id == counting.id),
                    "trigger.clickCancels", "clicking the notch during the countdown cancels that run")
             return
         }
         let starting = app.env.watch.phase == .starting
-        app.notch.tap()
+        app.notch.click()
         await pump(30)
         expect(mainWindow?.isVisible == true, "notch.tapOpensWindow", "clicking the notch must show the main window")
         // Watch that was still starting opens Teach once it records, right after the click.

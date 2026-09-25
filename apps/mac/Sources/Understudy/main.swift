@@ -25,6 +25,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             // At rest, a click opens the menu out of the notch.
             self?.showSkillMenu()
         })
+        // In the self-test the real pointer is wherever the person left it.
+        notch.followsPointer = env.selfTest == nil
         notch.menu.choose = { [weak self] id in
             guard let self, let skill = self.env.library.skills.first(where: { $0.id == id }) else { return }
             self.env.activity.hideMenu()

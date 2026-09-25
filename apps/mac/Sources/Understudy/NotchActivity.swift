@@ -186,8 +186,11 @@ final class NotchActivity: ObservableObject {
 
     /// Opens the menu out of the notch (clicked at rest). Anything that happens next (Watch, a
     /// countdown, a run) takes the notch over from it.
+    /// The menu opens over a notch with nothing to show: at rest, or a stopped Watch tucked away.
+    var canShowMenu: Bool { mode == .idle || mode == .stopped }
+
     func showMenu() {
-        guard mode == .idle else { return }
+        guard canShowMenu else { return }
         _ = beginOverlay()
         show(.menu, label: "Understudy", meta: "", rows: [], footer: "")
     }

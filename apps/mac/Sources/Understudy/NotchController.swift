@@ -11,7 +11,18 @@ final class NotchPanel: NSPanel {
 
 /// The first click on the non-activating panel should act, not just focus it.
 final class NotchHostingView<Content: View>: NSHostingView<Content> {
+    /// Called on mouse down. Returns true when it handled the click (the notch opened), so
+    /// SwiftUI never sees it; false passes it on (the open menu's tiles and buttons).
+    var onPress: () -> Bool = { false }
+
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+
+    override func mouseDown(with event: NSEvent) {
+        // Acting on the press, not the release, makes every click count: the shape and the
+        // window resize under the pointer on hover, which could swallow a tap gesture.
+        if onPress() { return }
+        super.mouseDown(with: event)
+    }
 }
 
 /// Places Understudy in the notch. On Macs without a notch, the strip drops down from
@@ -27,7 +38,11 @@ final class NotchController: NSObject {
     /// What the menu shows, filled by the app when it opens.
     let menu = NotchMenu()
     private var outsideClicks: [Any] = []
-    private var closeWork: DispatchWorkItem?
+    private var pointerTimer: Timer?
+    private var pointerOutside: Date?
+    /// Whether the menu closes when the pointer leaves it. Off in the self-test, where the real
+    /// pointer is wherever the person left it.
+    var followsPointer = true
     private let panel: NotchPanel
     private var hosting: NotchHostingView<NotchLiveView>!
     private var bag = Set<AnyCancellable>()
@@ -67,11 +82,12 @@ final class NotchController: NSObject {
         // Keep the strip out of Watch's screen recording: it shows the recording, not the task.
         panel.sharingType = .none
 
-        handleTap = { [weak activity] in
-            guard let activity else { return }
-            // A click on the open menu's background closes it; at rest, a click opens it.
+        handleTap = { [weak self, weak activity] in
+            guard let self, let activity else { return }
+            // A click on the open menu's background closes it. A click on the notch when it's
+            // tucked away (at rest, or after Watch stopped) always opens the menu.
             if activity.mode == .menu { return activity.hideMenu() }
-            if activity.mode == .idle { return onRest() }
+            if !self.state.expanded && activity.canShowMenu { return onRest() }
             let page = activity.page
             activity.dismiss()
             onTap(page)
@@ -79,6 +95,11 @@ final class NotchController: NSObject {
         let root = NotchLiveView(activity: activity, state: state, menu: menu, notchSize: notchSize, hasNotch: hasNotch,
                                  onTap: { [weak self] in self?.handleTap() })
         hosting = NotchHostingView(rootView: root)
+        hosting.onPress = { [weak self] in
+            guard let self, self.activity.mode != .menu else { return false }
+            self.handleTap()
+            return true
+        }
         panel.contentView = hosting
 
         activity.$mode.removeDuplicates().receive(on: RunLoop.main)
@@ -88,10 +109,6 @@ final class NotchController: NSObject {
         activity.objectWillChange.merge(with: state.objectWillChange)
             .debounce(for: .milliseconds(15), scheduler: RunLoop.main)
             .sink { [weak self] _ in self?.fit() }
-            .store(in: &bag)
-        // The menu closes a moment after the pointer leaves it (coming back keeps it open).
-        state.$hovering.removeDuplicates().receive(on: RunLoop.main)
-            .sink { [weak self] hovering in self?.hoverChanged(hovering) }
             .store(in: &bag)
 
         fit()
@@ -103,6 +120,10 @@ final class NotchController: NSObject {
 
     /// The same action as clicking the notch. Used by the self-test.
     func tap() { handleTap() }
+
+    /// A click as the mouse delivers it: the press is handled by the window (opening the notch),
+    /// or, on the open menu, passed to SwiftUI, where the background closes it.
+    func click() { if !hosting.onPress() { handleTap() } }
 
     /// The strip as SwiftUI draws it right now, at the panel's size. Used by the self-test,
     /// because copying a non-opaque panel's backing store doesn't match what's on screen.
@@ -116,9 +137,15 @@ final class NotchController: NSObject {
 
     private var reduceMotion: Bool { NSWorkspace.shared.accessibilityDisplayShouldReduceMotion }
 
+    private var lastMode: NotchActivity.Mode = .idle
+
     private func modeChanged(_ mode: NotchActivity.Mode) {
         hideWork?.cancel()
+        defer { lastMode = mode }
         watchOutsideClicks(mode == .menu)
+        watchPointer(mode == .menu && followsPointer)
+        // Closing the menu over a stopped Watch goes back to the tucked-away notch, not the strip.
+        if mode == .stopped && lastMode == .menu { return setExpanded(false) }
         setExpanded(mode != .idle)
         if mode == .stopped {
             // A stopped Watch waits in the main window. Tuck the strip away after a moment.
@@ -137,12 +164,26 @@ final class NotchController: NSObject {
 
     // MARK: Menu
 
-    private func hoverChanged(_ hovering: Bool) {
-        closeWork?.cancel()
-        guard !hovering, activity.mode == .menu else { return }
-        let work = DispatchWorkItem { [weak self] in self?.activity.hideMenu() }
-        closeWork = work
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.7, execute: work)
+    /// The menu closes once the pointer has been outside it for a moment. Where the pointer is
+    /// is read from the screen, not from hover events, which flicker while the window resizes.
+    private func watchPointer(_ on: Bool) {
+        pointerTimer?.invalidate()
+        pointerTimer = nil
+        pointerOutside = nil
+        guard on else { return }
+        let timer = Timer(timeInterval: 0.12, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated { self?.checkPointer() }
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        pointerTimer = timer
+    }
+
+    private func checkPointer() {
+        guard activity.mode == .menu else { return watchPointer(false) }
+        if panel.frame.insetBy(dx: -8, dy: -8).contains(NSEvent.mouseLocation) { pointerOutside = nil; return }
+        let since = pointerOutside ?? Date()
+        pointerOutside = since
+        if Date().timeIntervalSince(since) > 0.6 { activity.hideMenu() }
     }
 
     /// While the menu is open, a click anywhere else (another app, or Understudy's window) closes it.
