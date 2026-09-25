@@ -8,6 +8,8 @@ struct KeyboardShortcut: Codable, Equatable {
     let keyLabel: String
 
     static let defaultShortcut = KeyboardShortcut(keyCode: UInt32(kVK_Space), modifiers: UInt32(optionKey), keyLabel: "Space")
+    /// Opens the quick launcher.
+    static let launcherShortcut = KeyboardShortcut(keyCode: UInt32(kVK_Space), modifiers: UInt32(optionKey | shiftKey), keyLabel: "Space")
     static let modifierMask = UInt32(cmdKey | optionKey | controlKey | shiftKey)
 
     var display: String {

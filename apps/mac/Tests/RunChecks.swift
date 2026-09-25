@@ -113,6 +113,12 @@ struct RunChecks {
         precondition(Matching.keyword("Bloom Album • Caligula's Horse") == "Bloom Album" && Matching.keyword("Bloom · Recents") == "Bloom")
         precondition(Matching.similar("Bloom Album", "Bloom Album • Caligula's Horse") == false)   // same keyword: an exact match, not a fallback
         precondition(Matching.similar("Bloom", "Bloom (Deluxe) • Caligula's Horse") && !Matching.similar("Play", "Playlist"))
+        // The quick launcher: the start of the name, then a word, then inside, then letters in order.
+        precondition(Matching.launcherScore("pla", "Play Bloom") == 300 && Matching.launcherScore("blo", "Play Bloom") == 200)
+        precondition(Matching.launcherScore("loo", "Play Bloom") == 100 && Matching.launcherScore("pb", "Play Bloom") == 50)
+        precondition(Matching.launcherScore("xyz", "Play Bloom") == nil && Matching.launcherScore("", "Play Bloom") != nil)
+        precondition(Matching.launcherScore("reunion", "Reunión semanal") == 300)   // accents ignored
+        precondition(Matching.launcherRanked("b", ["Weekly budget", "Bloom", "Archive", "Play Bloom"]) == [1, 3, 0])
         precondition(Matching.similar("Liked Songs", "Liked Songs (1,680)") && !Matching.similar("Rust", "Rusty"))
         precondition(!Matching.similar("Go", "Good") && !Matching.similar("Bloom", "Doom"))
         precondition(Matching.appeared(after: "Bloom Album • Caligula's Horse", before: ["Your Library", "Liked Songs"], after: ["Your Library", "Bloom"]))

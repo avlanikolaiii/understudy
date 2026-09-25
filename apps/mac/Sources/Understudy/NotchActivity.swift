@@ -18,7 +18,7 @@ struct NotchRow: Identifiable, Equatable {
 /// after it are still simulated and say so.
 @MainActor
 final class NotchActivity: ObservableObject {
-    enum Mode: Equatable { case idle, watching, stopped, learned, rehearsing, scheduled, running, receipt, demo }
+    enum Mode: Equatable { case idle, watching, stopped, learned, rehearsing, scheduled, running, receipt, demo, menu }
     enum Dot: Equatable { case steady, pulse, rehearse }
 
     @Published private(set) var mode: Mode = .idle
@@ -31,6 +31,8 @@ final class NotchActivity: ObservableObject {
     @Published private(set) var dot: Dot = .steady
     /// The honest label: "Simulated" or "Concept demonstration".
     @Published private(set) var footer = ""
+    /// While a run waits for the person (an OK, or the next step when testing), which.
+    @Published private(set) var runPause: RunEngine.Pause?
 
     private let watch: WatchSession
     private var bag = Set<AnyCancellable>()
@@ -63,7 +65,7 @@ final class NotchActivity: ObservableObject {
         case .learned: .skills
         case .running, .scheduled: .skills
         case .rehearsing, .receipt: .results
-        case .idle, .demo: .home
+        case .idle, .demo, .menu: .home
         }
     }
 
@@ -182,6 +184,23 @@ final class NotchActivity: ObservableObject {
         later(token, 15) { $0.endOverlay() }
     }
 
+    // MARK: Menu
+
+    /// Opens the menu out of the notch (clicked at rest). Anything that happens next (Watch, a
+    /// countdown, a run) takes the notch over from it.
+    /// The menu opens over a notch with nothing to show: at rest, or a stopped Watch tucked away.
+    var canShowMenu: Bool { mode == .idle || mode == .stopped }
+
+    func showMenu() {
+        guard canShowMenu else { return }
+        _ = beginOverlay()
+        show(.menu, label: "Understudy", meta: "", rows: [], footer: "")
+    }
+
+    func hideMenu() {
+        if mode == .menu { endOverlay() }
+    }
+
     /// Clears a New skill or Receipt strip. Watch and rehearsal keep going.
     func dismiss() {
         // A run, a rehearsal, and the countdown before a triggered run aren't dismissed by a click:
@@ -201,6 +220,7 @@ final class NotchActivity: ObservableObject {
     /// The run in progress: the steps done so far and the one running or waiting for the person.
     func showRun(_ name: String, steps: [SkillDefinition.Step], results: [StepOutcome], current: Int?, pause: RunEngine.Pause?) {
         run = (name, steps, results, current, pause)
+        runPause = pause
         if mode != .running { _ = beginOverlay() }
         var rows: [NotchRow] = []
         for (index, step) in steps.enumerated() where results[index].status != .notRun || index == current {
@@ -221,6 +241,7 @@ final class NotchActivity: ObservableObject {
     /// The end of a run: its receipt, for a few seconds.
     func showRunReceipt(_ receipt: Receipt) {
         run = nil
+        runPause = nil
         let token = beginOverlay()
         let rows = receipt.steps.enumerated().map { index, step in
             row("Step \(index + 1)", step.step, end: step.status == "Done" ? "✓" : step.status == "Skipped" || step.status == "Not run" ? "–" : "needs you",

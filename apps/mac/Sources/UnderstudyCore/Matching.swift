@@ -34,4 +34,33 @@ public enum Matching {
         func count(_ list: [String]) -> Int { list.filter(matches).count }
         return count(texts) > count(before)
     }
+
+    // MARK: Quick launcher
+
+    /// How well what's typed in the quick launcher fits a skill's name, higher is better, or nil
+    /// when it doesn't fit: the name starts with it (300), a word starts with it (200), it's
+    /// inside the name (100), or its letters appear in order, like "pb" for "Play Bloom" (50).
+    /// Case and accents are ignored. Empty text fits everything equally.
+    public static func launcherScore(_ typed: String, _ name: String) -> Int? {
+        let fold = { (text: String) in text.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: nil) }
+        let query = fold(typed.trimmingCharacters(in: .whitespaces)), target = fold(name)
+        guard !query.isEmpty else { return 1 }
+        if target.hasPrefix(query) { return 300 }
+        let words = target.split { !$0.isLetter && !$0.isNumber }.map(String.init)
+        if words.contains(where: { $0.hasPrefix(query) }) { return 200 }
+        if target.contains(query) { return 100 }
+        var rest = Substring(target)
+        for character in query where !character.isWhitespace {
+            guard let found = rest.firstIndex(of: character) else { return nil }
+            rest = rest[rest.index(after: found)...]
+        }
+        return 50
+    }
+
+    /// Names ranked for what's typed: best fit first, then alphabetically. Names that don't fit are left out.
+    public static func launcherRanked(_ typed: String, _ names: [String]) -> [Int] {
+        names.indices.compactMap { index in launcherScore(typed, names[index]).map { (index, $0) } }
+            .sorted { $0.1 != $1.1 ? $0.1 > $1.1 : names[$0.0].localizedCaseInsensitiveCompare(names[$1.0]) == .orderedAscending }
+            .map(\.0)
+    }
 }

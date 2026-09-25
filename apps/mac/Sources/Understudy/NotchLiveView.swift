@@ -10,6 +10,12 @@ enum NotchStyle {
     static let rehearse = Color(red: 0.561, green: 0.722, blue: 1.0)     // #8FB8FF
     static let script = Font.custom("Courier New", size: 12)
     static let openWidth: CGFloat = 440
+    static let menuWidth: CGFloat = 560
+    /// The outward curves where the shape meets the top edge, like the hardware notch's.
+    static let openEar: CGFloat = 12
+    static let hoverEar: CGFloat = 6
+    /// How far past the notch's shape a click still counts, when it's tucked away.
+    static let hitMargin: CGFloat = 8
     static let closedRadius: CGFloat = 13
     static let openRadius: CGFloat = 22
     /// The page's `cubic-bezier(.3,.9,.3,1)` over 0.5 s, as a spring.
@@ -51,10 +57,17 @@ struct NotchDot: View {
     }
 }
 
-/// A black shape around the notch: a small pill when idle, the live strip when something is happening.
+/// A black shape around the notch. At rest it's exactly the camera housing's size, so only the
+/// hardware shows; under the pointer it widens a little and shows the dot. It opens into the live
+/// strip when something is happening, and into the menu when clicked.
+///
+/// The black is pure #000000 and opaque: no material, tint, or shadow. On an LCD the backlight
+/// still lights it faintly, which is why it stays hidden behind the hardware at rest.
 struct NotchLiveView: View {
     @ObservedObject var activity: NotchActivity
     @ObservedObject var state: NotchState
+    @ObservedObject var menu: NotchMenu
+    var controls = NotchRunControls()
     let notchSize: CGSize
     let hasNotch: Bool
     let onTap: () -> Void
@@ -62,20 +75,29 @@ struct NotchLiveView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var open: Bool { state.expanded }
+    private var isMenu: Bool { activity.mode == .menu }
     private var bandHeight: CGFloat { hasNotch ? notchSize.height : 30 }
-    private var pillWidth: CGFloat { hasNotch ? notchSize.width + (state.hovering ? 44 : 30) * 2 : 200 }
+    /// At rest: the housing exactly. Under the pointer: room for the dot beside it.
+    private var pillWidth: CGFloat { hasNotch ? notchSize.width + (state.hovering ? 64 : 0) : 200 }
+    private var openWidth: CGFloat { isMenu ? NotchStyle.menuWidth : NotchStyle.openWidth }
+    private var ear: CGFloat { !hasNotch ? 0 : open ? NotchStyle.openEar : state.hovering ? NotchStyle.hoverEar : 0 }
     /// The space beside the camera housing on each side, when open.
-    private var wing: CGFloat { hasNotch ? (NotchStyle.openWidth - notchSize.width) / 2 - 16 : .infinity }
+    private var wing: CGFloat { hasNotch ? (openWidth - notchSize.width) / 2 - 16 : .infinity }
 
     var body: some View {
-        let shape = UnevenRoundedRectangle(bottomLeadingRadius: open ? NotchStyle.openRadius : NotchStyle.closedRadius,
-                                           bottomTrailingRadius: open ? NotchStyle.openRadius : NotchStyle.closedRadius)
+        let shape = NotchShape(ear: ear, bottom: open ? NotchStyle.openRadius : NotchStyle.closedRadius)
         VStack(alignment: .leading, spacing: 0) {
             head.frame(height: bandHeight)
-            if open { content.transition(.opacity) }
+            if open {
+                Group {
+                    if isMenu { NotchMenuBody(menu: menu) } else { content }
+                }
+                .transition(.opacity)
+            }
         }
-        .padding(.horizontal, open ? 16 : 12)
-        .frame(width: open ? NotchStyle.openWidth : pillWidth, alignment: .top)
+        .padding(.horizontal, open ? 16 : state.hovering ? 12 : 0)
+        .frame(width: open ? openWidth : pillWidth, alignment: .top)
+        .padding(.horizontal, ear)
         .background(shape.fill(Color.black))
         .clipShape(shape)
         .contentShape(shape)
@@ -87,14 +109,21 @@ struct NotchLiveView: View {
         .environment(\.colorScheme, .dark)
         .accessibilityElement(children: .combine)
         .accessibilityLabel(accessibilityText)
-        .accessibilityHint("Opens Understudy")
+        .accessibilityHint(activity.mode == .idle ? "Shows your skills" : "Opens Understudy")
         .accessibilityAddTraits(.isButton)
         .accessibilityAction(.default) { onTap() }
+        // Tucked away, the notch catches clicks a little beyond its shape, and everywhere inside
+        // its frame (the corners and ears are transparent, and clicks there would fall through).
+        .padding(.horizontal, open || !hasNotch ? 0 : NotchStyle.hitMargin)
+        .padding(.bottom, open || !hasNotch ? 0 : NotchStyle.hitMargin / 2)
+        .background(Color.black.opacity(0.01))
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
 
     @ViewBuilder private var head: some View {
-        if open {
+        if open && isMenu {
+            NotchMenuHeader(menu: menu, dot: activity.dot, wing: wing, gap: hasNotch ? notchSize.width : 8, space: space)
+        } else if open {
             HStack(spacing: 0) {
                 HStack(spacing: 8) {
                     NotchDot(style: activity.dot).matchedGeometryEffect(id: "dot", in: space)
@@ -110,6 +139,7 @@ struct NotchLiveView: View {
             HStack {
                 Spacer()
                 NotchDot(style: activity.dot).matchedGeometryEffect(id: "dot", in: space)
+                    .opacity(state.hovering || !hasNotch ? 1 : 0)
             }
         }
     }
@@ -121,13 +151,17 @@ struct NotchLiveView: View {
             }
             ForEach(activity.rows) { row in
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    Text(row.app).foregroundStyle(NotchStyle.muted).frame(width: 66, alignment: .leading)
+                    Text(row.app).foregroundStyle(NotchStyle.muted).lineLimit(1).truncationMode(.tail)
+                        .frame(width: 76, alignment: .leading)
                     Text(row.text).foregroundStyle(NotchStyle.color(row.tone)).lineLimit(1).truncationMode(.tail)
                     Spacer(minLength: 4)
                     if let end = row.end { Text(end).foregroundStyle(NotchStyle.color(row.endTone)).lineLimit(1) }
                 }
                 .font(NotchStyle.script)
                 .transition(.asymmetric(insertion: .opacity.combined(with: .offset(y: 4)), removal: .opacity))
+            }
+            if activity.mode == .running {
+                NotchRunButtons(controls: controls, pause: activity.runPause)
             }
             if !activity.footer.isEmpty {
                 Text(activity.footer).font(.system(size: 10)).foregroundStyle(NotchStyle.muted).padding(.top, 4)

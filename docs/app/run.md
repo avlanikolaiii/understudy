@@ -46,7 +46,7 @@ Skills → **Run now** or **Test step by step** (every step waits for "Run this 
 
 - One run at a time. A run never starts while Watch is recording, and Watch doesn't start during a run: the run's keystrokes would end up in the recording.
 - A step that can't run, or fails (for example, a button that isn't found within its wait, or a field the app won't let Understudy click into), stops the run. Nothing after it is guessed. After **Stop**, nothing from that run acts any more, even a step that was waiting.
-- A step that sends, pays, or deletes pauses the run until **Approve** or **Skip step**. That includes buttons named that way (Send, Pay, Delete, in English or Spanish) and keys that send or delete in common apps: ⌘↩ and Mail's ⇧⌘D send; Delete, ⌘⌫, ⇧⌘⌫, and # (Gmail, Superhuman) delete. The notch shows **Needs your OK**; clicking it opens the run.
+- A step that sends, pays, or deletes pauses the run until **Approve** or **Skip step**, in the run panel or right in the notch (which also has **Stop** while a run goes). That includes buttons named that way (Send, Pay, Delete, in English or Spanish) and keys that send or delete in common apps: ⌘↩ and Mail's ⇧⌘D send; Delete, ⌘⌫, ⇧⌘⌫, and # (Gmail, Superhuman) delete. The notch shows **Needs your OK**; clicking it opens the run.
 - It never moves the mouse. It does bring apps to the front and type, so it uses the keyboard while it runs.
 
 Every run ends with a receipt (`kind = run`): each step's status (Done, Skipped, Blocked, Failed, Not run) and, separately, its evidence (Verified, Not verifiable, with what was checked). For example, "Opened Superhuman" is verified by reading which app is in front; a pressed button is "Not verifiable" because what it did can't be read back.
@@ -71,8 +71,9 @@ Some apps have their own commands on the Mac. A step can use one instead of clic
 ## Starting a skill from anywhere
 
 - **A shortcut per skill:** in Skills, under the run buttons, **Set shortcut** and press the keys (for example ⌥1). It must include ⌘, ⌥, or ⌃. It can't be the Watch shortcut or another skill's. Pressing it runs the skill at once. Shortcuts are kept on this Mac.
-- **The notch menu:** click the notch while it's at rest to get a menu of the skills with steps, plus **Open Understudy**. A skill chosen there counts down for 10 seconds first, so a stray click can be undone.
-- **Links:** `open "understudy://run?skill=Play%20Bloom"` from Terminal, Shortcuts, Raycast, or Alfred. `skill` is the skill's name or id. Any other query items fill its values, for example `&album=Bloom`. A run started by a link always counts down first, because another app sent it. A link to a skill that doesn't exist runs nothing, and the notch says so.
+- **The notch menu:** click the notch while it's at rest and it opens into a menu of the skills with steps, as tiles, plus **Teach** and **Open Understudy** (see [interface-prototype.md](interface-prototype.md)). A skill chosen there starts right away (or next, if another is running). Only triggers count down and wait for you to pause.
+- **The quick launcher:** press ⇧⌥Space anywhere (or menu bar → **Run a Skill…**). Type part of a skill's name (its start, a word, or letters in order, like "pb" for Play Bloom), pick with ↑↓, and ↩ runs it at once. A skill with `{values}` asks for them first, filled with its defaults (⇥ moves between them). Esc goes back or closes; clicking elsewhere closes it. It also offers **Teach a skill** and **Open Understudy**. ⇧⌥Space can't be taken by a skill's shortcut.
+- **Links:** `open "understudy://run?skill=Play%20Bloom"` from Terminal, Shortcuts, Raycast, or Alfred. `skill` is the skill's name or id. Any other query items fill its values, for example `&album=Bloom`. A run started by a link starts right away, like the others you start yourself. A link to a skill that doesn't exist runs nothing, and the notch says so.
 - **Notifications:** when a run ends, or waits for your OK, macOS shows a notification (Understudy asks for permission the first time). Clicking it opens the receipt, or the run that waits.
 
 ## When it runs
