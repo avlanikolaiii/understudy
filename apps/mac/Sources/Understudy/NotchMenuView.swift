@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import UnderstudyCore
 
 /// The black shape around the notch. Where it's wider than the camera housing, its top corners
 /// curve outward into the screen edge (the "ears"), so it reads as part of the hardware notch.
@@ -44,6 +45,54 @@ final class NotchMenu: ObservableObject {
     var choose: (UUID) -> Void = { _ in }
     var openApp: () -> Void = {}
     var teach: () -> Void = {}
+}
+
+/// Stop, Skip, and Approve for the run the notch shows, so it can be steered without the window.
+@MainActor
+final class NotchRunControls: ObservableObject {
+    var stop: () -> Void = {}
+    var skip: () -> Void = {}
+    var approve: () -> Void = {}
+}
+
+/// The buttons under a run in the notch. Approve (or Run step, when testing step by step) and
+/// Skip show while the run waits; Stop shows always.
+struct NotchRunButtons: View {
+    let controls: NotchRunControls
+    let pause: RunEngine.Pause?
+
+    var body: some View {
+        HStack(spacing: 6) {
+            if let pause {
+                NotchPill(title: pause == .approval ? "Approve" : "Run step", symbol: "checkmark", prominent: true, action: controls.approve)
+                NotchPill(title: "Skip step", symbol: "forward.end", prominent: false, action: controls.skip)
+            }
+            Spacer(minLength: 0)
+            NotchPill(title: "Stop", symbol: "stop.fill", prominent: false, action: controls.stop)
+        }
+        .padding(.top, 6)
+    }
+}
+
+/// A small rounded button for the notch: yellow when it's the one the run waits for.
+struct NotchPill: View {
+    let title: String
+    let symbol: String
+    let prominent: Bool
+    let action: () -> Void
+    @StateObject private var hover = HoverState()
+
+    var body: some View {
+        Button(action: action) {
+            Label(title, systemImage: symbol).font(.system(size: 11, weight: .semibold)).labelStyle(.titleAndIcon)
+                .padding(.horizontal, 10).frame(height: 24)
+                .foregroundStyle(prominent ? Color.black : NotchStyle.ink)
+                .background(Capsule().fill(prominent ? NotchStyle.highlight.opacity(hover.on ? 0.9 : 1) : Color.white.opacity(hover.on ? 0.16 : 0.08)))
+        }
+        .buttonStyle(NotchPressStyle())
+        .onHover { hovering in withAnimation(.easeOut(duration: 0.15)) { hover.on = hovering } }
+        .accessibilityLabel(title)
+    }
 }
 
 /// The menu that opens out of the notch: a header beside the camera, then the skills as tiles.
@@ -124,7 +173,7 @@ struct NotchSkillTile: View {
     static let size = CGSize(width: 99, height: 108)
     let item: NotchMenu.Item
     let action: () -> Void
-    @State private var hovered = false
+    @StateObject private var hover = HoverState()
 
     var body: some View {
         Button(action: action) {
@@ -138,14 +187,14 @@ struct NotchSkillTile: View {
             }
             .padding(.horizontal, 8).padding(.vertical, 10)
             .frame(width: Self.size.width, height: Self.size.height)
-            .background(NotchTileBackground(hovered: hovered))
+            .background(NotchTileBackground(hovered: hover.on))
             .overlay(alignment: .topTrailing) {
                 Image(systemName: "play.fill").font(.system(size: 8)).foregroundStyle(NotchStyle.highlight)
-                    .padding(8).opacity(hovered ? 1 : 0)
+                    .padding(8).opacity(hover.on ? 1 : 0)
             }
         }
         .buttonStyle(NotchPressStyle())
-        .onHover { hovering in withAnimation(.easeOut(duration: 0.15)) { hovered = hovering } }
+        .onHover { hovering in withAnimation(.easeOut(duration: 0.15)) { hover.on = hovering } }
         .accessibilityLabel("Run \(item.name)")
         .accessibilityHint(item.caption)
     }
@@ -155,7 +204,7 @@ struct NotchSkillTile: View {
 struct NotchMoreTile: View {
     let count: Int
     let action: () -> Void
-    @State private var hovered = false
+    @StateObject private var hover = HoverState()
 
     var body: some View {
         Button(action: action) {
@@ -166,10 +215,10 @@ struct NotchMoreTile: View {
             }
             .padding(.vertical, 10)
             .frame(width: NotchSkillTile.size.width, height: NotchSkillTile.size.height)
-            .background(NotchTileBackground(hovered: hovered))
+            .background(NotchTileBackground(hovered: hover.on))
         }
         .buttonStyle(NotchPressStyle())
-        .onHover { hovering in withAnimation(.easeOut(duration: 0.15)) { hovered = hovering } }
+        .onHover { hovering in withAnimation(.easeOut(duration: 0.15)) { hover.on = hovering } }
         .accessibilityLabel("\(count) more skills in Understudy")
     }
 }
@@ -188,16 +237,16 @@ struct NotchIconButton: View {
     let symbol: String
     let label: String
     let action: () -> Void
-    @State private var hovered = false
+    @StateObject private var hover = HoverState()
 
     var body: some View {
         Button(action: action) {
             Image(systemName: symbol).font(.system(size: 11, weight: .semibold))
                 .frame(width: 24, height: 24)
-                .background(Circle().fill(Color.white.opacity(hovered ? 0.16 : 0.08)))
+                .background(Circle().fill(Color.white.opacity(hover.on ? 0.16 : 0.08)))
         }
         .buttonStyle(NotchPressStyle())
-        .onHover { hovering in withAnimation(.easeOut(duration: 0.15)) { hovered = hovering } }
+        .onHover { hovering in withAnimation(.easeOut(duration: 0.15)) { hover.on = hovering } }
         .accessibilityLabel(label)
     }
 }
@@ -246,4 +295,10 @@ extension NotchAppIcon {
         cache[bundle] = image
         return image
     }
+}
+
+/// Whether the pointer is over a view (the project keeps view state in observable objects).
+@MainActor
+final class HoverState: ObservableObject {
+    @Published var on = false
 }

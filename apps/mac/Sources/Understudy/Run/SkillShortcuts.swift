@@ -14,12 +14,12 @@ final class SkillShortcuts: ObservableObject {
 
     private let defaults: UserDefaults
     private let install: Installer
-    private let reserved: () -> KeyboardShortcut
+    private let reserved: () -> [KeyboardShortcut]
     private var registrations: [UUID: AnyObject] = [:]
     private var run: (UUID) -> Void = { _ in }
 
-    /// `reserved` is the main Watch shortcut, which a skill can't take.
-    init(defaults: UserDefaults = .standard, reserved: @escaping () -> KeyboardShortcut,
+    /// `reserved` are Understudy's own shortcuts (Watch, the quick launcher), which a skill can't take.
+    init(defaults: UserDefaults = .standard, reserved: @escaping () -> [KeyboardShortcut],
          install: @escaping Installer = { try HotKey(shortcut: $0, action: $1) }) {
         self.defaults = defaults; self.reserved = reserved; self.install = install
         if let data = defaults.data(forKey: Self.preferenceKey),
@@ -42,7 +42,7 @@ final class SkillShortcuts: ObservableObject {
         error = nil
         if let reason = shortcut.validationError { error = (skill, reason); return false }
         let same = { (other: KeyboardShortcut) in other.keyCode == shortcut.keyCode && other.modifiers == shortcut.modifiers }
-        if same(reserved()) { error = (skill, "That's Understudy's Watch shortcut. Choose another."); return false }
+        if reserved().contains(where: same) { error = (skill, "Understudy uses that shortcut (Watch or the quick launcher). Choose another."); return false }
         if shortcuts.contains(where: { $0.key != skill && same($0.value) }) {
             error = (skill, "Another skill uses that shortcut. Choose another."); return false
         }

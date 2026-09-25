@@ -14,6 +14,8 @@ enum NotchStyle {
     /// The outward curves where the shape meets the top edge, like the hardware notch's.
     static let openEar: CGFloat = 12
     static let hoverEar: CGFloat = 6
+    /// How far past the notch's shape a click still counts, when it's tucked away.
+    static let hitMargin: CGFloat = 8
     static let closedRadius: CGFloat = 13
     static let openRadius: CGFloat = 22
     /// The page's `cubic-bezier(.3,.9,.3,1)` over 0.5 s, as a spring.
@@ -65,6 +67,7 @@ struct NotchLiveView: View {
     @ObservedObject var activity: NotchActivity
     @ObservedObject var state: NotchState
     @ObservedObject var menu: NotchMenu
+    var controls = NotchRunControls()
     let notchSize: CGSize
     let hasNotch: Bool
     let onTap: () -> Void
@@ -109,6 +112,11 @@ struct NotchLiveView: View {
         .accessibilityHint(activity.mode == .idle ? "Shows your skills" : "Opens Understudy")
         .accessibilityAddTraits(.isButton)
         .accessibilityAction(.default) { onTap() }
+        // Tucked away, the notch catches clicks a little beyond its shape, and everywhere inside
+        // its frame (the corners and ears are transparent, and clicks there would fall through).
+        .padding(.horizontal, open || !hasNotch ? 0 : NotchStyle.hitMargin)
+        .padding(.bottom, open || !hasNotch ? 0 : NotchStyle.hitMargin / 2)
+        .background(Color.black.opacity(0.01))
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
 
@@ -143,13 +151,17 @@ struct NotchLiveView: View {
             }
             ForEach(activity.rows) { row in
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    Text(row.app).foregroundStyle(NotchStyle.muted).frame(width: 66, alignment: .leading)
+                    Text(row.app).foregroundStyle(NotchStyle.muted).lineLimit(1).truncationMode(.tail)
+                        .frame(width: 76, alignment: .leading)
                     Text(row.text).foregroundStyle(NotchStyle.color(row.tone)).lineLimit(1).truncationMode(.tail)
                     Spacer(minLength: 4)
                     if let end = row.end { Text(end).foregroundStyle(NotchStyle.color(row.endTone)).lineLimit(1) }
                 }
                 .font(NotchStyle.script)
                 .transition(.asymmetric(insertion: .opacity.combined(with: .offset(y: 4)), removal: .opacity))
+            }
+            if activity.mode == .running {
+                NotchRunButtons(controls: controls, pause: activity.runPause)
             }
             if !activity.footer.isEmpty {
                 Text(activity.footer).font(.system(size: 10)).foregroundStyle(NotchStyle.muted).padding(.top, 4)

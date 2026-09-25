@@ -149,6 +149,11 @@
           "id": "notch.menu",
           "label": "Notch · Menu",
           "suite": "self-test"
+        },
+        {
+          "id": "launcher.open",
+          "label": "Quick launcher",
+          "suite": "self-test"
         }
       ],
       "edges": [
@@ -436,6 +441,36 @@
           "action": "notchTap",
           "from": "notch.menu",
           "to": "notch.idle"
+        },
+        {
+          "action": "launcherOpen",
+          "from": "notch.idle",
+          "to": "launcher.open"
+        },
+        {
+          "action": "launcherEnter",
+          "from": "launcher.open",
+          "to": "run.running"
+        },
+        {
+          "action": "launcherEscape",
+          "from": "launcher.open",
+          "to": "notch.idle"
+        },
+        {
+          "action": "notchStop",
+          "from": "run.running",
+          "to": "run.receipt"
+        },
+        {
+          "action": "notchApprove",
+          "from": "run.waiting",
+          "to": "run.running"
+        },
+        {
+          "action": "notchSkip",
+          "from": "run.waiting",
+          "to": "run.running"
         }
       ]
     },

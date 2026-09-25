@@ -31,6 +31,8 @@ final class NotchActivity: ObservableObject {
     @Published private(set) var dot: Dot = .steady
     /// The honest label: "Simulated" or "Concept demonstration".
     @Published private(set) var footer = ""
+    /// While a run waits for the person (an OK, or the next step when testing), which.
+    @Published private(set) var runPause: RunEngine.Pause?
 
     private let watch: WatchSession
     private var bag = Set<AnyCancellable>()
@@ -218,6 +220,7 @@ final class NotchActivity: ObservableObject {
     /// The run in progress: the steps done so far and the one running or waiting for the person.
     func showRun(_ name: String, steps: [SkillDefinition.Step], results: [StepOutcome], current: Int?, pause: RunEngine.Pause?) {
         run = (name, steps, results, current, pause)
+        runPause = pause
         if mode != .running { _ = beginOverlay() }
         var rows: [NotchRow] = []
         for (index, step) in steps.enumerated() where results[index].status != .notRun || index == current {
@@ -238,6 +241,7 @@ final class NotchActivity: ObservableObject {
     /// The end of a run: its receipt, for a few seconds.
     func showRunReceipt(_ receipt: Receipt) {
         run = nil
+        runPause = nil
         let token = beginOverlay()
         let rows = receipt.steps.enumerated().map { index, step in
             row("Step \(index + 1)", step.step, end: step.status == "Done" ? "✓" : step.status == "Skipped" || step.status == "Not run" ? "–" : "needs you",

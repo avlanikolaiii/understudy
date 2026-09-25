@@ -206,7 +206,9 @@ final class Scheduler: ObservableObject {
                 await self.sleep(15)
                 if Task.isCancelled { return }
             }
-            var waited: TimeInterval = 0
+            // A trigger waits for the person to pause. A run they asked for (a tile in the notch,
+            // a link) doesn't: they just clicked, so waiting for a pause would look like nothing happened.
+            var waited: TimeInterval = entry.triggered ? 0 : Self.idleWaitLimit
             while self.idleSeconds() < Self.idleNeeded && waited < Self.idleWaitLimit {
                 await self.sleep(15); waited += 15
                 if Task.isCancelled { return }

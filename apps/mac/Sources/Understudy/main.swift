@@ -6,6 +6,8 @@ import UnderstudyCore
 final class AppDelegate: NSObject, NSApplicationDelegate {
     lazy var env = AppEnvironment(arguments: CommandLine.arguments)
     private(set) var notch: NotchController!
+    private(set) var launcher: QuickLauncher!
+    private var launcherHotKey: HotKey?
     private var statusItem: NSStatusItem!
     private var shortcutSettings: ShortcutSettingsController!
     private var shortcutObservation: AnyCancellable?
@@ -25,6 +27,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             // At rest, a click opens the menu out of the notch.
             self?.showSkillMenu()
         })
+        // Stop, Skip, and Approve under a run in the notch.
+        notch.controls.stop = { [weak self] in self?.env.runner.stop() }
+        notch.controls.skip = { [weak self] in self?.env.runner.skip() }
+        notch.controls.approve = { [weak self] in self?.env.runner.approve() }
+        // The quick launcher (⇧⌥Space): a skill chosen there runs at once, as the person asked.
+        launcher = QuickLauncher(model: env.launcher)
+        env.launcher.run = { [weak self] skill, values in self?.runNow(skill.id, values: values) }
+        env.launcher.teach = { [weak self] in self?.workspace.teachSkill() }
+        env.launcher.openApp = { [weak self] in self?.workspace.show() }
+        if env.selfTest == nil {
+            launcherHotKey = try? HotKey(shortcut: .launcherShortcut) { [weak self] in
+                MainActor.assumeIsolated { self?.launcher.toggle() }
+            }
+        }
         // In the self-test the real pointer is wherever the person left it.
         notch.followsPointer = env.selfTest == nil
         notch.menu.choose = { [weak self] id in
@@ -48,6 +64,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let open = NSMenuItem(title: "Open Understudy", action: #selector(openWorkspace), keyEquivalent: "o")
         open.target = self
         menu.addItem(open)
+        let launcherItem = NSMenuItem(title: "Run a Skill…  ⇧⌥Space", action: #selector(openLauncher), keyEquivalent: "")
+        launcherItem.target = self
+        menu.addItem(launcherItem)
         let watchItem = NSMenuItem(title: "Watch a Task", action: #selector(shortcutPressed), keyEquivalent: "")
         watchItem.target = self
         menu.addItem(watchItem)
@@ -192,10 +211,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // MARK: Starting skills from anywhere
 
     /// A skill's own shortcut: the person asked for it directly, so it runs at once.
-    func runNow(_ id: UUID) {
+    func runNow(_ id: UUID, values: [String: String] = [:]) {
         guard let skill = env.library.skills.first(where: { $0.id == id }) else { return }
-        if !env.runner.start(skill, mode: .run) { reportProblem(skill.name, env.runner.problem ?? "It couldn't start.") }
+        if !env.runner.start(skill, mode: .run, values: values) { reportProblem(skill.name, env.runner.problem ?? "It couldn't start.") }
     }
+
+    @objc func openLauncher() { launcher.toggle() }
 
     /// Why a skill didn't start. A countdown in the notch stays there (a click on it must still
     /// cancel), so then it's said in a notification instead.

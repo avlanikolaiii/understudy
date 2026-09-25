@@ -37,6 +37,8 @@ final class NotchController: NSObject {
     private let state = NotchState()
     /// What the menu shows, filled by the app when it opens.
     let menu = NotchMenu()
+    /// Stop, Skip, and Approve for a run, set by the app.
+    let controls = NotchRunControls()
     private var outsideClicks: [Any] = []
     private var pointerTimer: Timer?
     private var pointerOutside: Date?
@@ -92,11 +94,13 @@ final class NotchController: NSObject {
             activity.dismiss()
             onTap(page)
         }
-        let root = NotchLiveView(activity: activity, state: state, menu: menu, notchSize: notchSize, hasNotch: hasNotch,
+        let root = NotchLiveView(activity: activity, state: state, menu: menu, controls: controls, notchSize: notchSize, hasNotch: hasNotch,
                                  onTap: { [weak self] in self?.handleTap() })
         hosting = NotchHostingView(rootView: root)
         hosting.onPress = { [weak self] in
-            guard let self, self.activity.mode != .menu else { return false }
+            // Tucked away, a press opens the notch at once. Open (the menu, a run with its
+            // buttons, a strip), the press goes to what's under it.
+            guard let self, !self.state.expanded else { return false }
             self.handleTap()
             return true
         }
@@ -128,7 +132,7 @@ final class NotchController: NSObject {
     /// The strip as SwiftUI draws it right now, at the panel's size. Used by the self-test,
     /// because copying a non-opaque panel's backing store doesn't match what's on screen.
     func render() -> NSBitmapImageRep? {
-        let view = NotchLiveView(activity: activity, state: state, menu: menu, notchSize: notchSize, hasNotch: hasNotch, onTap: {})
+        let view = NotchLiveView(activity: activity, state: state, menu: menu, controls: controls, notchSize: notchSize, hasNotch: hasNotch, onTap: {})
             .frame(width: panel.frame.width, height: panel.frame.height)
         let renderer = ImageRenderer(content: view)
         renderer.scale = 2

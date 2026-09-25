@@ -167,6 +167,12 @@ final class SelfTest {
         snapshot(notchWindow, name: "notch-menu")
         app.env.activity.hideMenu()
         await pump(settle)
+        // The quick launcher, with what's typed filtering the skills.
+        app.openLauncher()
+        await pump(250)
+        snapshot(NSApp.windows.first { $0 is LauncherPanel }, name: "launcher")
+        app.env.launcher.close()
+        await pump(100)
         app.openSettings()
         await pump(250)
         checkSettingsWindow()
@@ -306,6 +312,34 @@ final class SelfTest {
             }
             always.append(("runLink", { await self.runFromOutside(skill, link: true) }))
         }
+        // Under a run in the notch: Stop always, Approve (or Run step) and Skip while it waits.
+        if activity.mode == .running && app.env.runner.isRunning {
+            let runner = app.env.runner
+            always.append(("notchStop", { await self.stopRun(viaNotch: true) }))
+            if runner.pause != nil && activity.runPause == runner.pause {
+                always.append(("notchApprove", { await self.approveStep(viaNotch: true) }))
+                always.append(("notchSkip", {
+                    let index = runner.current
+                    self.app.notch.controls.skip()
+                    await self.pump(10)
+                    if let index, runner.results.indices.contains(index) {
+                        self.expect(runner.results[index].status == .skipped, "run.notchSkip", "Skip step in the notch skips that step")
+                    }
+                }))
+            }
+        }
+        // The quick launcher (⇧⌥Space) over any app.
+        let launcher = app.env.launcher
+        // Open, it's in front of everything, so its actions count as on screen (below).
+        let launcherInFront = launcher.isOpen ? launcherActions() : []
+        if !launcher.isOpen && rng.chance(15) {
+            always.append(("launcherOpen", {
+                self.app.openLauncher()
+                await self.pump(20)
+                self.expect(launcher.isOpen && self.app.launcher.isVisible && launcher.asking == nil && launcher.query.isEmpty,
+                            "launcher.opens", "the shortcut opens an empty quick launcher")
+            }))
+        }
         // The menu out of the notch: run a skill from a tile, open the app, teach, or close it.
         // While it's open it's what the person looks at, so these count as on screen (below).
         var menuActions: [Action] = []
@@ -337,7 +371,7 @@ final class SelfTest {
         if app.notch.hasNotch || app.notch.isExpanded { always.append(("notchTap", { await self.tapNotch() })) }
 
         // What the main window offers on the current page. Nothing here while the window is closed.
-        var onScreen: [Action] = menuActions
+        var onScreen: [Action] = menuActions + launcherInFront
         if windowOpen {
             onScreen.append(("nav", { ui.page = self.rng.pick(PrototypePage.allCases) }))
             onScreen.append(("toolbarTeach", { ui.showTeaching(watch: watch) }))
@@ -804,6 +838,54 @@ final class SelfTest {
         await pump(5)
     }
 
+    /// What can be done in the open quick launcher: type, move, run (↩), or go back / close (Esc).
+    private func launcherActions() -> [(String, () async -> Void)] {
+        let launcher = app.env.launcher, runner = app.env.runner
+        var actions: [(String, () async -> Void)] = [("launcherEscape", {
+            let asking = launcher.asking != nil
+            launcher.escape()
+            await self.pump(10)
+            self.expect(asking ? (launcher.isOpen && launcher.asking == nil) : (!launcher.isOpen && !self.app.launcher.isVisible),
+                        "launcher.escape", "Esc goes back from the values, or closes the launcher")
+        })]
+        if launcher.asking == nil {
+            actions.append(("launcherType", {
+                let names = self.app.env.library.skills.map(\.name)
+                let name = names.isEmpty ? "x" : self.rng.pick(names)
+                launcher.query = self.rng.pick([String(name.prefix(self.rng.int(1...4))), String(name.suffix(3)), "zzq", "", "teach"])
+                let skills = self.app.env.library.skills
+                self.expect(launcher.entries.allSatisfy { entry in
+                    guard case .skill(let skill) = entry else { return true }
+                    return !skill.definition.steps.isEmpty && Matching.launcherScore(launcher.query, skill.name) != nil
+                        && skills.contains { $0.id == skill.id }
+                } && launcher.selection == 0, "launcher.filters", "the launcher lists only skills with steps that fit what's typed")
+            }))
+            actions.append(("launcherMove", { launcher.move(self.rng.chance(50) ? 1 : -1) }))
+        }
+        actions.append(("launcherEnter", {
+            let entries = launcher.entries
+            let asking = launcher.asking
+            let chosen = asking.map { LauncherModel.Entry.skill($0) } ?? (entries.indices.contains(launcher.selection) ? entries[launcher.selection] : nil)
+            let wasRunning = runner.isRunning
+            launcher.enter()
+            await self.pump(20)
+            guard let chosen else { return }
+            switch chosen {
+            case .skill(let skill) where asking == nil && !skill.variables.isEmpty:
+                self.expect(launcher.isOpen && launcher.asking?.id == skill.id && Set(skill.variables).isSubset(of: launcher.values.keys),
+                            "launcher.asksValues", "a skill with values asks for them, filled with its defaults")
+            case .skill(let skill):
+                self.expect(!launcher.isOpen && (wasRunning || (runner.skill?.id == skill.id && !runner.results.isEmpty) || runner.problem != nil),
+                            "launcher.runs", "↩ on a skill closes the launcher and runs it at once, or says why it can't")
+            case .teach:
+                self.expect(!launcher.isOpen && self.app.env.ui.page == .teach, "launcher.teaches", "Teach a skill opens Teach")
+            case .openApp:
+                self.expect(!launcher.isOpen && self.mainWindow?.isVisible == true, "launcher.opensApp", "Open Understudy shows the main window")
+            }
+        }))
+        return actions
+    }
+
     /// Run now / Test step by step. A step can fail now and then, as when a control isn't found.
     private func run(_ skill: Skill, mode: RunEngine.Mode) async {
         let runner = app.env.runner, library = app.env.library
@@ -836,18 +918,18 @@ final class SelfTest {
                "the steps before a resume are marked as not repeated")
     }
 
-    private func approveStep() async {
+    private func approveStep(viaNotch: Bool = false) async {
         let runner = app.env.runner
         if let index = runner.current { approved.insert(runner.steps[index].id) }
         let before = app.env.library.receipts.count
-        runner.approve()
+        if viaNotch { app.notch.controls.approve() } else { runner.approve() }
         await pump(30)
         checkRunEnded(before: before)
     }
 
-    private func stopRun() async {
+    private func stopRun(viaNotch: Bool = false) async {
         let before = app.env.library.receipts.count
-        app.env.runner.stop()
+        if viaNotch { app.notch.controls.stop() } else { app.env.runner.stop() }
         await pump(10)
         expect(!app.env.runner.isRunning && app.env.library.receipts.count == before + 1 && app.env.library.receipts.first?.outcome == "Stopped",
                "run.stopSavesReceipt", "Stop ends the run and saves a receipt that says it was stopped")
@@ -997,6 +1079,7 @@ final class SelfTest {
         if app.env.activity.mode == .scheduled { visit("trigger.countdown") }
         if !app.env.scheduler.scheduled.isEmpty { visit("trigger.set") }
         if !app.env.skillShortcuts.shortcuts.isEmpty { visit("launch.shortcut") }
+        if app.env.launcher.isOpen { visit("launcher.open") }
         if app.env.ui.page == .results, (app.env.library.receipts.first { $0.id == app.env.ui.selectedReceipt } ?? app.env.library.receipts.first)?.isRun == true {
             visit("run.receipt")
         }

@@ -24,6 +24,8 @@ final class AppEnvironment {
     /// Run notifications; none in the self-test.
     let notifier = Notifier()
     let ui = WorkspaceState()
+    /// The quick launcher's list and choice (its panel is made by the app).
+    let launcher: LauncherModel
     let shortcuts = ShortcutManager()
 
     /// Recordings stay on this Mac, one folder each.
@@ -78,10 +80,11 @@ final class AppEnvironment {
         if selfTest != nil {
             // Shortcuts are checked without registering real system hot keys.
             skillShortcuts = SkillShortcuts(defaults: UserDefaults(suiteName: "understudy-self-test-keys-\(UUID().uuidString)")!,
-                                            reserved: { [shortcuts] in shortcuts.shortcut }, install: { _, _ in NSObject() })
+                                            reserved: { [shortcuts] in [shortcuts.shortcut, .launcherShortcut] }, install: { _, _ in NSObject() })
         } else {
-            skillShortcuts = SkillShortcuts(reserved: { [shortcuts] in shortcuts.shortcut })
+            skillShortcuts = SkillShortcuts(reserved: { [shortcuts] in [shortcuts.shortcut, .launcherShortcut] })
             runner.notify = { [notifier] title, body, page in notifier.post(title: title, body: body, opens: page) }
         }
+        launcher = LauncherModel(library: library, shortcuts: skillShortcuts)
     }
 }
