@@ -10,6 +10,7 @@ struct MainWindowView: View {
     @ObservedObject var activity: NotchActivity
     let runner: RunController
     let scheduler: Scheduler
+    let skillShortcuts: SkillShortcuts
     var openSettings: () -> Void = {}
 
     private var activeSkill: Skill { ui.activeSkill(in: library) }
@@ -149,7 +150,8 @@ struct MainWindowView: View {
                     Text("Understudy replays these steps exactly as you did them, without the mouse. Delete anything you don't want, like switching back to Understudy.")
                         .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                     StepListView(steps: ui.draftSteps, edits: StepEdits(delete: ui.deleteStep, moveUp: ui.moveStepUp,
-                                                                        retype: { ui.setTypedText($0, at: $1) }, ui: ui, list: "review"),
+                                                                        retype: { ui.setTypedText($0, at: $1) }, ui: ui, list: "review",
+                                                                        setValue: { WorkspaceState.setCommandValue($0, $1, at: $2, in: &ui.draftSteps) }),
                                  recording: ui.draftRecording)
                 }
                 detail("YOUR NOTES", ui.rules.isEmpty ? "No additional notes." : ui.rules)
@@ -198,7 +200,7 @@ struct MainWindowView: View {
             if ui.editing == activeSkill.id {
                 editForm(activeSkill)
             } else if !activeSkill.definition.steps.isEmpty {
-                RunPanelView(runner: runner, ui: ui, skill: activeSkill, openReceipts: { ui.selectedReceipt = runner.lastReceipt; ui.page = .results })
+                RunPanelView(runner: runner, ui: ui, shortcuts: skillShortcuts, skill: activeSkill, openReceipts: { ui.selectedReceipt = runner.lastReceipt; ui.page = .results })
                 TriggerEditorView(ui: ui, scheduler: scheduler, skill: activeSkill) { trigger in
                     ui.saveTrigger(trigger, of: activeSkill, library: library)
                 }
@@ -240,7 +242,8 @@ struct MainWindowView: View {
                 delete: { WorkspaceState.deleteStep(at: $0, in: &ui.editSteps) },
                 moveUp: { WorkspaceState.moveStepUp(at: $0, in: &ui.editSteps) },
                 retype: { WorkspaceState.setTypedText($0, at: $1, in: &ui.editSteps) },
-                ui: ui, list: "edit", rerecord: { ui.rerecordStep($0, of: skill, watch: watch) }),
+                ui: ui, list: "edit", rerecord: { ui.rerecordStep($0, of: skill, watch: watch) },
+                setValue: { WorkspaceState.setCommandValue($0, $1, at: $2, in: &ui.editSteps) }),
                 recording: skill.definition.recording)
             let variables = Variables.names(in: ui.editSteps)
             if !variables.isEmpty {

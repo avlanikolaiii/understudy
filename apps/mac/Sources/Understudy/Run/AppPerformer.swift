@@ -7,14 +7,19 @@ import UnderstudyCore
 /// says how it was checked. It needs Accessibility access (the same as Watch).
 @MainActor
 final class AppPerformer: StepPerformer {
-    private var cancelled = false
+    /// Each step (and each Stop) gets a new number. Delayed work from an older one does nothing,
+    /// so a stopped run never presses, types, or opens anything afterwards.
+    private var generation = 0
 
     static let accessibilityNeeded = "Understudy needs Accessibility access to run skills. "
         + "Turn on Understudy in System Settings → Privacy & Security → Accessibility."
 
     func perform(_ step: SkillDefinition.Step, done: @escaping (StepOutcome) -> Void) {
-        cancelled = false
-        guard AX.isTrusted else { return done(StepOutcome(.blocked, .none, Self.accessibilityNeeded)) }
+        generation += 1
+        // App commands, links, and plain waits don't use Accessibility.
+        guard AX.isTrusted || ["command", "open", "waitSeconds"].contains(step.parameters["action"] ?? "") else {
+            return done(StepOutcome(.blocked, .none, Self.accessibilityNeeded))
+        }
         switch step.parameters["action"] {
         case "activate": activate(step, done)
         case "press", "focus": act(on: step, done)
@@ -22,11 +27,12 @@ final class AppPerformer: StepPerformer {
         case "open": open(step, done)
         case "type": type(step, done)
         case "keys": keys(step, done)
+        case "command": command(step, done)
         default: done(StepOutcome(.blocked, .none, step.parameters["reason"] ?? "This step can't run yet."))
         }
     }
 
-    func cancel() { cancelled = true }
+    func cancel() { generation += 1 }
 
     // MARK: Steps
 
@@ -37,8 +43,10 @@ final class AppPerformer: StepPerformer {
         }
         let configuration = NSWorkspace.OpenConfiguration()
         configuration.activates = true
+        let token = generation
         NSWorkspace.shared.openApplication(at: url, configuration: configuration) { app, error in
             DispatchQueue.main.async { [self] in
+                guard token == generation else { return }
                 guard let app, error == nil else {
                     return done(StepOutcome(.failed, .none, "\(name) didn't open: \(error?.localizedDescription ?? "unknown error")."))
                 }
@@ -94,10 +102,17 @@ final class AppPerformer: StepPerformer {
             }
             AXUIElementPerformAction(element, "AXScrollToVisible" as CFString)
             if step.parameters["action"] == "focus" {
-                AXUIElementSetAttributeValue(element, kAXFocusedAttribute as CFString, kCFBooleanTrue)
-                let focused = AX.focusedElement(pid: pid).map { CFEqual($0, element) } ?? false
-                return done(focused ? StepOutcome(.done, .verified, "The cursor is in \(RecordedAction.quote(label)).\(note)")
-                                    : StepOutcome(.done, .notVerifiable, "Clicked into \(RecordedAction.quote(label)); focus couldn't be read back.\(note)"))
+                // What's typed next goes where the cursor is, so a click into the field that the app
+                // refuses, or that lands elsewhere, stops the run instead of typing into the wrong field.
+                let result = AXUIElementSetAttributeValue(element, kAXFocusedAttribute as CFString, kCFBooleanTrue)
+                guard result == .success else {
+                    return done(StepOutcome(.failed, .none, "\(app.localizedName ?? "The app") didn't let Understudy click into \(RecordedAction.quote(label)).\(note)"))
+                }
+                guard let focused = AX.focusedElement(pid: pid) else {
+                    return done(StepOutcome(.done, .notVerifiable, "Clicked into \(RecordedAction.quote(label)); focus couldn't be read back.\(note)"))
+                }
+                return done(CFEqual(focused, element) ? StepOutcome(.done, .verified, "The cursor is in \(RecordedAction.quote(label)).\(note)")
+                                                      : StepOutcome(.failed, .none, "The cursor didn't move into \(RecordedAction.quote(label)).\(note)"))
             }
             // Pressed through Accessibility, wherever it is on screen; a double-click presses twice.
             let before = AX.landmarks(pid: pid)
@@ -161,6 +176,57 @@ final class AppPerformer: StepPerformer {
         }
     }
 
+    /// An app's own command, from the vetted list: nothing on screen is looked for.
+    private func command(_ step: SkillDefinition.Step, _ done: @escaping (StepOutcome) -> Void) {
+        guard let command = step.parameters["command"].flatMap(AppCommand.init(rawValue:)) else {
+            return done(StepOutcome(.blocked, .none, "This command isn't one Understudy knows."))
+        }
+        let invocation: AppCommand.Invocation
+        do { invocation = try command.invocation(step.parameters) } catch {
+            return done(StepOutcome(.failed, .none, (error as? AppCommand.Problem)?.message ?? "\(error)"))
+        }
+        switch invocation {
+        case .script(let source):
+            let token = generation
+            AppleScripts.run(source, app: command.appName) { [self] result in
+                guard token == generation else { return }
+                switch result {
+                case .success(let report):
+                    done(command.verified(report) ? StepOutcome(.done, .verified, report)
+                                                  : StepOutcome(.done, .notVerifiable, report.isEmpty ? "\(command.appName) took the command." : report))
+                case .failure(let problem):
+                    let blocked = problem.message.contains("Automation")
+                    done(StepOutcome(blocked ? .blocked : .failed, .none, problem.message))
+                }
+            }
+        case .open(let link, let app):
+            let url = link.hasPrefix("/") ? URL(fileURLWithPath: link) : URL(string: link)
+            guard let url else { return done(StepOutcome(.failed, .none, "\(RecordedAction.quote(link)) can't be opened.")) }
+            guard !url.isFileURL || FileManager.default.fileExists(atPath: url.path) else {
+                return done(StepOutcome(.failed, .none, "\(url.path) doesn't exist."))
+            }
+            let appURL = app.flatMap { NSWorkspace.shared.urlForApplication(withBundleIdentifier: $0) }
+            if app != nil && appURL == nil { return done(StepOutcome(.failed, .none, "That browser isn't on this Mac.")) }
+            let configuration = NSWorkspace.OpenConfiguration()
+            let finished: @Sendable (NSRunningApplication?, Error?) -> Void = { opened, error in
+                let name = opened?.localizedName, failure = error?.localizedDescription
+                DispatchQueue.main.async {
+                    MainActor.assumeIsolated {
+                        done(failure == nil ? StepOutcome(.done, name == nil ? .notVerifiable : .verified,
+                                                          "Opened \(RecordedAction.quote(link, limit: 48)) in \(name ?? "its app").")
+                                            : StepOutcome(.failed, .none, "macOS couldn't open it: \(failure!)."))
+                    }
+                }
+            }
+            if let appURL { NSWorkspace.shared.open([url], withApplicationAt: appURL, configuration: configuration, completionHandler: finished) }
+            else { NSWorkspace.shared.open(url, configuration: configuration, completionHandler: finished) }
+        case .reveal(let path):
+            guard FileManager.default.fileExists(atPath: path) else { return done(StepOutcome(.failed, .none, "\(path) doesn't exist.")) }
+            NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: path)])
+            done(StepOutcome(.done, .verified, "\((path as NSString).lastPathComponent) is shown in Finder."))
+        }
+    }
+
     /// How long a step waits for what it needs: its own timeout, or 10 s.
     static func timeout(_ step: SkillDefinition.Step) -> Double { Double(step.parameters["timeout"] ?? "") ?? 10 }
 
@@ -184,7 +250,9 @@ final class AppPerformer: StepPerformer {
                 event?.post(tap: .cghidEventTap)
             }
         }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+        let token = generation
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [self] in
+            guard token == generation else { return }
             let value = AX.focusedElement(pid: app.processIdentifier).flatMap { AX.string($0, kAXValueAttribute, limit: 100_000) }
             done(value?.contains(text) == true ? StepOutcome(.done, .verified, "The field now contains \(RecordedAction.quote(text)).")
                                                : StepOutcome(.done, .notVerifiable, "Typed \(RecordedAction.quote(text)); the field couldn't be read back."))
@@ -203,7 +271,9 @@ final class AppPerformer: StepPerformer {
             let field = app.flatMap { AX.focusedElement(pid: $0.processIdentifier) }
             let before = field.flatMap { AX.string($0, kAXValueAttribute, limit: 10_000) }
             Self.post(code, flags)
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+            let token = self.generation
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [self] in
+                guard token == generation else { return }
                 // ↩ in a field that had text: it's submitted when the text changes or clears.
                 if keys == "↩", let field, let before, !before.isEmpty, AX.string(field, kAXValueAttribute, limit: 10_000) != before {
                     return done(StepOutcome(.done, .verified, "Pressed ↩; the field was submitted."))
@@ -249,8 +319,9 @@ final class AppPerformer: StepPerformer {
     /// Checks `condition` every 0.25 s until it holds or the timeout passes, then calls `then`.
     private func poll(_ condition: @escaping () -> Bool, timeout: Double = 5, then: @escaping (Bool) -> Void) {
         let deadline = Date().addingTimeInterval(timeout)
+        let token = generation
         func check() {
-            if cancelled { return }
+            guard token == generation else { return }
             if condition() { return then(true) }
             if Date() > deadline { return then(false) }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { check() }

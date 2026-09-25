@@ -26,6 +26,7 @@ CHECKS = {  # name: (extra swiftc flags, app sources, test)
     "steps":     ([], [], "StepsChecks"),
     "run":       ([], [], "RunChecks"),
     "trigger":   ([], [], "TriggerChecks"),
+    "commands":  ([], [], "CommandChecks"),
     "library":   ([], ["Library"], "PrototypeChecks"),
     "watch":     ([], ["WatchSession"], "WatchChecks"),
     "workspace": ([], ["Library", "WatchSession", "WorkspaceState"], "WorkspaceChecks"),

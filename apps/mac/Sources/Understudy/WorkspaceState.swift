@@ -76,6 +76,23 @@ final class WorkspaceState: ObservableObject {
         steps[index].intent = "Type \(RecordedAction.quote(text))"
     }
 
+    /// A field of an App command step (e.g. the Spotify link), with its description updated.
+    static func setCommandValue(_ key: String, _ value: String, at index: Int, in steps: inout [SkillDefinition.Step]) {
+        guard steps.indices.contains(index), steps[index].parameters["action"] == "command",
+              let command = steps[index].parameters["command"].flatMap(AppCommand.init(rawValue:)),
+              command.fields.contains(where: { $0.key == key }) else { return }
+        steps[index].parameters[key] = value
+        steps[index].intent = command.intent(steps[index].parameters)
+    }
+
+    /// Replaces Spotify's clicks in a list with Spotify's own command playing `uri`.
+    @discardableResult
+    func useSpotifyCommand(in list: String, uri: String, name: String) -> Bool {
+        guard let replaced = AppCommand.replacingSpotifyClicks(in: list == "review" ? draftSteps : editSteps, with: uri, name: name) else { return false }
+        if list == "review" { draftSteps = replaced } else { editSteps = replaced }
+        return true
+    }
+
     func deleteStep(at index: Int) { Self.deleteStep(at: index, in: &draftSteps) }
     func moveStepUp(at index: Int) { Self.moveStepUp(at: index, in: &draftSteps) }
     func setTypedText(_ text: String, at index: Int) { Self.setTypedText(text, at: index, in: &draftSteps) }
@@ -113,7 +130,7 @@ final class WorkspaceState: ObservableObject {
         updated.name = editName.trimmingCharacters(in: .whitespacesAndNewlines)
         updated.client = editClient.trimmingCharacters(in: .whitespacesAndNewlines)
         updated.definition.rules = SkillDefinition.Rule.lines(editNotes)
-        updated.definition.steps = editSteps
+        updated.definition.steps = ManualStep.uniqueIDs(editSteps)
         // Placeholders keep their defaults as inputs the person is asked for ("ask").
         updated.definition.inputs = updated.definition.inputs.filter { $0.connector != "ask" }
             + Variables.names(in: editSteps).map { .init(id: $0, name: $0, connector: "ask", location: editDefaults[$0] ?? "") }
@@ -134,10 +151,13 @@ final class WorkspaceState: ObservableObject {
     @Published var addAppName = ""
     @Published var addKeys = ""
     var addKeyCode: Int?
+    /// An App command and its fields.
+    @Published var addCommand: AppCommand = .spotifyPlay
+    @Published var addValues: [String: String] = [:]
 
     func beginAdding(to list: String, at index: Int) {
         adding = Insertion(list: list, index: index)
-        addText = ""; addKeys = ""; addKeyCode = nil; addSeconds = 2
+        addText = ""; addKeys = ""; addKeyCode = nil; addSeconds = 2; addValues = [:]
     }
 
     /// The step the form describes, or nil while it's incomplete.
@@ -151,6 +171,7 @@ final class WorkspaceState: ObservableObject {
         case .waitText: return text.isEmpty ? nil : ManualStep.waitText(text, app: app, bundle: bundle)
         case .waitSeconds: return addSeconds > 0 ? ManualStep.waitSeconds(addSeconds) : nil
         case .openLink: return text.isEmpty ? nil : ManualStep.openLink(text)
+        case .command: return addCommand.problem(addValues) == nil ? addCommand.step(addValues) : nil
         }
     }
 
@@ -183,6 +204,7 @@ final class WorkspaceState: ObservableObject {
         watch.stop()
         if let recording = watch.recording, !recording.actions.isEmpty, editSteps.indices.contains(target.index) {
             editSteps.replaceSubrange(target.index...target.index, with: StepsFromRecording.steps(from: recording))
+            editSteps = ManualStep.uniqueIDs(editSteps)
         }
         replacing = nil
         watch.dismiss()

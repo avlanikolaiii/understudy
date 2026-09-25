@@ -6,6 +6,8 @@ import UnderstudyCore
 struct RunPanelView: View {
     @ObservedObject var runner: RunController
     @ObservedObject var ui: WorkspaceState
+    @ObservedObject var shortcuts: SkillShortcuts
+    @ObservedObject var keys = KeyCapture.shared
     let skill: Skill
 
     /// What the person typed for each placeholder, or its default.
@@ -21,6 +23,19 @@ struct RunPanelView: View {
             Text("Run \(skill.name)").font(.system(size: 20, weight: .semibold))
             Text("Understudy opens the apps and repeats your steps with the keyboard and by button names. It doesn't move the mouse. Steps that send, pay, or delete wait for your OK. Click the notch to stop.")
                 .font(.system(size: 13)).foregroundStyle(Color.secondary).fixedSize(horizontal: false, vertical: true)
+            HStack(spacing: 10) {
+                Text("Shortcut").font(.callout)
+                Text(shortcuts.shortcuts[skill.id]?.display ?? "None").font(.system(.callout, design: .monospaced)).foregroundStyle(.secondary)
+                Button(keys.listening ? "Press the keys now…" : shortcuts.shortcuts[skill.id] == nil ? "Set shortcut" : "Change") {
+                    keys.captureEvent { event in
+                        if let shortcut = KeyboardShortcut(event: event) { shortcuts.set(shortcut, for: skill.id) }
+                    }
+                }.controlSize(.small)
+                if shortcuts.shortcuts[skill.id] != nil { Button("Remove") { shortcuts.remove(for: skill.id) }.controlSize(.small) }
+                if let error = shortcuts.error, error.skill == skill.id { Text(error.message).font(.caption).foregroundStyle(.orange) }
+            }
+            Text("Also: click the notch for a menu of your skills, or open understudy://run?skill=\(skill.name.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? skill.name) from Shortcuts, Raycast, or Terminal.")
+                .font(.caption).foregroundStyle(.secondary).textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
             if let problem = runner.problem {
                 Label(problem, systemImage: "exclamationmark.triangle").font(.callout).foregroundStyle(.orange)
                     .fixedSize(horizontal: false, vertical: true)

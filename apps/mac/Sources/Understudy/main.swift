@@ -1,5 +1,6 @@
 import AppKit
 import Combine
+import UnderstudyCore
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
@@ -8,16 +9,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem!
     private var shortcutSettings: ShortcutSettingsController!
     private var shortcutObservation: AnyCancellable?
+    private var skillsObservation: AnyCancellable?
     private var workspace: WorkspaceController!
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         shortcutSettings = ShortcutSettingsController(manager: env.shortcuts)
         workspace = WorkspaceController(auth: env.model, library: env.library, ui: env.ui, watch: env.watch, activity: env.activity,
-                                        runner: env.runner, scheduler: env.scheduler, openSettings: { [weak self] in self?.shortcutSettings.show() })
+                                        runner: env.runner, scheduler: env.scheduler, skillShortcuts: env.skillShortcuts, openSettings: { [weak self] in self?.shortcutSettings.show() })
         notch = NotchController(activity: env.activity, onTap: { [weak self] page in
             guard let self else { return }
             // During the countdown before a triggered run, a click cancels that run.
             if self.env.activity.mode == .scheduled { return self.env.scheduler.cancelPending() }
+            // At rest, a click offers the skills to run (the self-test can't click a menu).
+            if self.env.activity.mode == .idle, self.env.selfTest == nil, self.showSkillMenu() { return }
             self.workspace.show(page)
         })
         installMainMenu()
@@ -54,6 +58,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         env.shortcuts.start { [weak self] in self?.shortcutPressed() }
         env.model.start()
         env.scheduler.start()
+        env.notifier.open = { [weak self] page in self?.workspace.show(page == "skills" ? .skills : .results) }
+        skillsObservation = env.library.$skills.receive(on: RunLoop.main).sink { [weak self] skills in
+            self?.env.skillShortcuts.start(skills: skills.map(\.id)) { id in self?.runNow(id) }
+        }
         if CommandLine.arguments.contains("--notch-demo") {
             // Plays the landing page's hero sequence in the real notch, for side-by-side comparison.
             env.activity.playDemo()
@@ -154,10 +162,84 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    /// Email sign-in links and OAuth redirects arrive as understudy://auth-callback?...
+    /// Email sign-in links and OAuth redirects arrive as understudy://auth-callback?...;
+    /// understudy://run?skill=<name or id>[&value=…] runs a skill (from Shortcuts, Raycast, Terminal).
     func application(_ application: NSApplication, open urls: [URL]) {
-        for url in urls { env.model.handle(url: url) }
-        workspace.show(.account)
+        for url in urls {
+            if url.host == "run" { runFromLink(url); continue }
+            env.model.handle(url: url)
+            workspace.show(.account)
+        }
+    }
+
+    // MARK: Starting skills from anywhere
+
+    /// A skill's own shortcut: the person asked for it directly, so it runs at once.
+    func runNow(_ id: UUID) {
+        guard let skill = env.library.skills.first(where: { $0.id == id }) else { return }
+        if !env.runner.start(skill, mode: .run) { reportProblem(skill.name, env.runner.problem ?? "It couldn't start.") }
+    }
+
+    /// Why a skill didn't start. A countdown in the notch stays there (a click on it must still
+    /// cancel), so then it's said in a notification instead.
+    private func reportProblem(_ name: String, _ reason: String) {
+        if env.activity.mode == .scheduled {
+            if env.selfTest == nil { env.notifier.post(title: "\(name) didn't run", body: reason, opens: "skills") }
+        } else {
+            env.activity.showRunProblem(name, reason: reason)
+        }
+    }
+
+    /// The skill a link names: its id, or its name when exactly one skill with steps has it.
+    static func skill(named wanted: String, in skills: [Skill]) -> Result<Skill, AppCommand.Problem> {
+        if let skill = skills.first(where: { $0.id.uuidString.caseInsensitiveCompare(wanted) == .orderedSame }) {
+            return skill.definition.steps.isEmpty ? .failure(.init(message: "That skill has no steps yet.")) : .success(skill)
+        }
+        let named = skills.filter { !$0.definition.steps.isEmpty && $0.name.caseInsensitiveCompare(wanted) == .orderedSame }
+        if named.count > 1 { return .failure(.init(message: "\(named.count) skills are called that. Use the skill's id in the link.")) }
+        return named.first.map { .success($0) } ?? .failure(.init(message: "No skill with steps is called that."))
+    }
+
+    /// A link came from another app, so the run counts down first (and can be cancelled).
+    func runFromLink(_ url: URL) {
+        let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
+        let wanted = (items.first { $0.name == "skill" }?.value ?? "").trimmingCharacters(in: .whitespaces)
+        let skill: Skill
+        switch Self.skill(named: wanted, in: env.library.skills) {
+        case .success(let found): skill = found
+        case .failure(let problem): return reportProblem(wanted.isEmpty ? "Link" : wanted, problem.message)
+        }
+        var values: [String: String] = [:]
+        for item in items where item.name != "skill" { values[item.name] = item.value ?? "" }
+        env.scheduler.fire(skill, values: values, triggered: false)
+    }
+
+    /// Chosen from the notch's menu: counts down like a trigger, so a stray click can be undone.
+    func runFromMenu(_ skill: Skill) { env.scheduler.fire(skill, triggered: false) }
+
+    /// The skills that can run, under the notch. Returns false when there are none.
+    private func showSkillMenu() -> Bool {
+        let runnable = env.library.skills.filter { !$0.definition.steps.isEmpty }
+        guard !runnable.isEmpty else { return false }
+        let menu = NSMenu()
+        for skill in runnable {
+            let shortcut = env.skillShortcuts.shortcuts[skill.id].map { "   \($0.display)" } ?? ""
+            let item = NSMenuItem(title: "Run \(skill.name)\(shortcut)", action: #selector(runFromMenuItem(_:)), keyEquivalent: "")
+            item.target = self
+            item.representedObject = skill.id
+            menu.addItem(item)
+        }
+        menu.addItem(.separator())
+        let open = NSMenuItem(title: "Open Understudy", action: #selector(openWorkspace), keyEquivalent: "")
+        open.target = self
+        menu.addItem(open)
+        menu.popUp(positioning: nil, at: NSEvent.mouseLocation, in: nil)
+        return true
+    }
+
+    @objc private func runFromMenuItem(_ item: NSMenuItem) {
+        guard let id = item.representedObject as? UUID, let skill = env.library.skills.first(where: { $0.id == id }) else { return }
+        runFromMenu(skill)
     }
 }
 

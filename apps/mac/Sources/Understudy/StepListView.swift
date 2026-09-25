@@ -10,6 +10,8 @@ struct StepEdits {
     var ui: WorkspaceState?
     var list = ""
     var rerecord: ((Int) -> Void)?
+    /// Sets a field of an App command step: (field, value, index).
+    var setValue: ((String, String, Int) -> Void)?
 }
 
 /// A skill's steps: what each does, in which app, how it runs, and what needs the person.
@@ -46,6 +48,18 @@ struct StepListView: View {
                                 }.controlSize(.small)
                             }
                         }
+                        if let edits, let setValue = edits.setValue, step.parameters["action"] == "command",
+                           let command = step.parameters["command"].flatMap(AppCommand.init(rawValue:)) {
+                            ForEach(command.fields.filter { $0.options.isEmpty }, id: \.key) { field in
+                                TextField(field.label, text: Binding(get: { step.parameters[field.key] ?? "" },
+                                                                     set: { setValue(field.key, $0, index) }))
+                                    .textFieldStyle(.roundedBorder).font(.caption).frame(maxWidth: 360)
+                                    .accessibilityLabel("\(field.label) for step \(index + 1)")
+                            }
+                            if let problem = command.problem(step.parameters) {
+                                Label(problem, systemImage: "exclamationmark.triangle").font(.caption).foregroundStyle(.orange)
+                            }
+                        }
                         if let edits, step.parameters["action"] == "type" {
                             TextField("Text to type", text: Binding(get: { step.parameters["text"] ?? "" },
                                                                    set: { edits.retype($0, index) }))
@@ -80,6 +94,9 @@ struct StepListView: View {
                 }
                 .padding(10).background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 8))
             }
+            if let edits, let ui = edits.ui, AppCommand.replacingSpotifyClicks(in: steps, with: "spotify:track:x", name: "") != nil {
+                SpotifyCommandOffer(ui: ui, list: edits.list)
+            }
             if let edits, let ui = edits.ui {
                 if ui.adding == .init(list: edits.list, index: steps.count) {
                     AddStepView(ui: ui)
@@ -98,7 +115,34 @@ struct StepListView: View {
         case "focus": "Clicks into the field"
         case "type": "Types with the keyboard"
         case "keys": "Presses keys"
+        case "command": "The app's own command"
+        case "open": "Opens it"
+        case "waitText", "waitSeconds": "Waits"
         default: step.executor == .unsupported ? "Can't run yet" : ""
         }
+    }
+}
+
+/// Spotify's clicks depend on its window. Its own command plays by link, even minimized: this
+/// reads what Spotify is playing now and offers that instead of the clicks.
+struct SpotifyCommandOffer: View {
+    @ObservedObject var ui: WorkspaceState
+    let list: String
+    @ObservedObject var reader = SpotifyNowPlaying.shared
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Label("Spotify can play this by its own command, without its window.", systemImage: "music.note")
+                .font(.system(size: 12, weight: .semibold))
+            Text("Start the song or album in Spotify, then use its command: the clicks on Spotify are replaced by one step that plays it by its link. You can paste an album or playlist link there instead (Share → Copy link).")
+                .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            HStack {
+                Button(reader.reading ? "Reading Spotify…" : "Use Spotify's own command instead") {
+                    reader.read { uri, name in ui.useSpotifyCommand(in: list, uri: uri, name: name) }
+                }.controlSize(.small).disabled(reader.reading)
+                if let problem = reader.problem { Text(problem).font(.caption).foregroundStyle(.orange).fixedSize(horizontal: false, vertical: true) }
+            }
+        }
+        .padding(10).background(Color.green.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
     }
 }

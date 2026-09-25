@@ -30,6 +30,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
   <key>CFBundleShortVersionString</key><string>0.1.0</string>
   <key>CFBundleVersion</key><string>1</string>
   <key>LSMinimumSystemVersion</key><string>14.0</string>
+  <key>NSAppleEventsUsageDescription</key><string>Skills can use an app's own commands, like playing a Spotify link or creating a Mail draft. Understudy only sends the commands in your skill's steps.</string>
   <key>NSHumanReadableCopyright</key><string>Understudy prototype. Not for distribution.</string>
   <key>CFBundleURLTypes</key>
   <array>

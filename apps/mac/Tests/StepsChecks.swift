@@ -80,6 +80,17 @@ struct StepsChecks {
         let key = ManualStep.keys("⌘K", keyCode: 40, app: "Superhuman", bundle: nil)
         precondition(key.parameters["keyCode"] == "40" && key.intent == "Press ⌘K" && !key.effect.needsApproval)
         precondition(ManualStep.keys("⌘↩", keyCode: nil, app: nil, bundle: nil).effect.needsApproval)
+        // Repeated ids (a step recorded again) are renamed; the first keeps its id, order is kept.
+        let twice = ManualStep.uniqueIDs([ManualStep.waitSeconds(1), ManualStep.waitSeconds(2)].map { var s = $0; s.id = "step-1"; return s })
+        precondition(twice[0].id == "step-1" && twice[1].id != "step-1" && twice[1].parameters["seconds"] == "2")
+        // Shortcuts that send or delete wait for the person's OK, recorded or added by hand.
+        for keys in ["⌘↩", "⇧⌘D", "⌫", "⌘⌫", "⇧⌘⌫", "#"] {
+            precondition(StepsFromRecording.effect(ofKeys: keys).needsApproval, keys)
+            precondition(ManualStep.keys(keys, keyCode: nil, app: nil, bundle: nil).effect.needsApproval, keys)
+        }
+        precondition(StepsFromRecording.effect(ofKeys: "⇧⌘D") == .send && StepsFromRecording.effect(ofKeys: "⌫") == .delete)
+        for keys in ["E", "⇧E", "⌘K", "↩", "↓", "⇥"] { precondition(!StepsFromRecording.effect(ofKeys: keys).needsApproval, keys) }
+        precondition(StepsFromRecording.effect(ofKeys: "E") == .write && StepsFromRecording.effect(ofKeys: "↓") == .read)
         precondition(ManualStep.waitText("Bloom", app: "Spotify", bundle: nil).parameters["action"] == "waitText")
         precondition(ManualStep.waitSeconds(3).parameters["seconds"] == "3" && ManualStep.openLink("spotify:album:x").parameters["link"] == "spotify:album:x")
         precondition(open.id != ManualStep.openApp(name: "Spotify", bundle: nil).id)

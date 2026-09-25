@@ -45,11 +45,35 @@ Measured live on Spotify: the "Bloom" album heading is recognized as the result 
 Skills → **Run now** or **Test step by step** (every step waits for "Run this step").
 
 - One run at a time. A run never starts while Watch is recording, and Watch doesn't start during a run: the run's keystrokes would end up in the recording.
-- A step that can't run, or fails (for example, a button that isn't found within 5 seconds), stops the run. Nothing after it is guessed.
-- A step that sends, pays, or deletes pauses the run until **Approve** or **Skip step**. The notch shows **Needs your OK**; clicking it opens the run.
+- A step that can't run, or fails (for example, a button that isn't found within its wait, or a field the app won't let Understudy click into), stops the run. Nothing after it is guessed. After **Stop**, nothing from that run acts any more, even a step that was waiting.
+- A step that sends, pays, or deletes pauses the run until **Approve** or **Skip step**. That includes buttons named that way (Send, Pay, Delete, in English or Spanish) and keys that send or delete in common apps: ⌘↩ and Mail's ⇧⌘D send; Delete, ⌘⌫, ⇧⌘⌫, and # (Gmail, Superhuman) delete. The notch shows **Needs your OK**; clicking it opens the run.
 - It never moves the mouse. It does bring apps to the front and type, so it uses the keyboard while it runs.
 
 Every run ends with a receipt (`kind = run`): each step's status (Done, Skipped, Blocked, Failed, Not run) and, separately, its evidence (Verified, Not verifiable, with what was checked). For example, "Opened Superhuman" is verified by reading which app is in front; a pressed button is "Not verifiable" because what it did can't be read back.
+
+## App commands
+
+Some apps have their own commands on the Mac. A step can use one instead of clicks: it doesn't look for anything on screen, so it works with the app's window moved, hidden, or minimized. Add step → **App command**:
+
+| App | Commands |
+|---|---|
+| Spotify | Play a song, album, or playlist link; pause; next; previous |
+| Music | Play a playlist; pause; next |
+| Finder | Open a folder; show a file (for example `{file}` from a folder trigger) |
+| Browser | Open a web link in the default browser, Safari, Chrome, Dia, or Arc |
+| Mail | Create a draft (to, subject, message). It's never sent: sending stays a step that waits for your OK |
+
+- The list is fixed (`AppCommand`). A step never runs a script someone wrote, and values can't add code to one: they're checked (a Spotify link must be a Spotify link, an address an address) and quoted.
+- Spotify, Music, and Mail commands run through AppleScript. The first time, macOS asks to let Understudy control that app (System Settings → Privacy & Security → Automation). Finder and browser commands only ask macOS to open something.
+- The receipt reads the result back: for example, "Playing: Bloom — Caligula's Horse" makes the step *Verified*.
+- **Spotify's own command instead of clicks:** when a skill's steps click in Spotify, the step list offers **Use Spotify's own command instead**. Start the song or album in Spotify and press it: Understudy reads what's playing and replaces the Spotify clicks with one step that plays it by its link. To play a whole album or playlist, paste its link into that step (Share → Copy link).
+
+## Starting a skill from anywhere
+
+- **A shortcut per skill:** in Skills, under the run buttons, **Set shortcut** and press the keys (for example ⌥1). It must include ⌘, ⌥, or ⌃. It can't be the Watch shortcut or another skill's. Pressing it runs the skill at once. Shortcuts are kept on this Mac.
+- **The notch menu:** click the notch while it's at rest to get a menu of the skills with steps, plus **Open Understudy**. A skill chosen there counts down for 10 seconds first, so a stray click can be undone.
+- **Links:** `open "understudy://run?skill=Play%20Bloom"` from Terminal, Shortcuts, Raycast, or Alfred. `skill` is the skill's name or id. Any other query items fill its values, for example `&album=Bloom`. A run started by a link always counts down first, because another app sent it. A link to a skill that doesn't exist runs nothing, and the notch says so.
+- **Notifications:** when a run ends, or waits for your OK, macOS shows a notification (Understudy asks for permission the first time). Clicking it opens the receipt, or the run that waits.
 
 ## When it runs
 
@@ -63,7 +87,7 @@ Skills → **When it runs**:
 
 Triggers run on the Mac where they were set (`Trigger.device`), while it's awake, you're logged in, and Understudy is open. **Open at login** keeps them working after a restart. A scheduled run the Mac slept through runs when it wakes, if it is less than 2 hours late, once.
 
-Before a triggered run, the notch counts down for 10 seconds ("Running in 10s"). Clicking the notch or pressing the shortcut cancels it. If you're typing or clicking, the run waits until you pause for a minute (at most 10 minutes). If it can't start (Watch is recording, or Accessibility is off), the notch says why.
+A waiting run is dropped if its skill is deleted, loses its trigger, or its account signs out; when its turn comes, it runs the skill as it is then, with any edits. Before a triggered run, the notch counts down for 10 seconds ("Running in 10s"). Clicking the notch or pressing the shortcut cancels it. If you're typing or clicking, the run waits until you pause for a minute (at most 10 minutes). If it can't start (Watch is recording, or Accessibility is off), the notch says why.
 
 ## Tests
 

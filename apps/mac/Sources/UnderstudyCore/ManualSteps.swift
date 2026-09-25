@@ -6,7 +6,7 @@ public enum ManualStep {
     public typealias Step = SkillDefinition.Step
 
     public enum Kind: String, CaseIterable, Sendable {
-        case openApp, keys, type, waitText, waitSeconds, openLink
+        case openApp, keys, type, waitText, waitSeconds, openLink, command
 
         public var title: String {
             switch self {
@@ -16,6 +16,7 @@ public enum ManualStep {
             case .waitText: "Wait until text shows"
             case .waitSeconds: "Wait some seconds"
             case .openLink: "Open a link or file"
+            case .command: "App command"
             }
         }
     }
@@ -30,7 +31,7 @@ public enum ManualStep {
         var parameters = ["action": "keys", "keys": keys, "app": app ?? ""]
         if let keyCode { parameters["keyCode"] = String(keyCode) }
         return Step(id: newID(), intent: "Press \(keys)", executor: .keyboard, target: .init(app: bundle),
-                    effect: keys == "⌘↩" ? .send : .read, evidence: .none, parameters: parameters)
+                    effect: StepsFromRecording.effect(ofKeys: keys), evidence: .none, parameters: parameters)
     }
 
     /// Typed into whatever has focus in the app, as a recorded Type step is.
@@ -57,13 +58,25 @@ public enum ManualStep {
     }
 
     static func newID() -> String { "manual-" + UUID().uuidString.prefix(8).lowercased() }
+
+    /// The steps with any repeated id given a new one (a step recorded again brings its own
+    /// "step-1", …). Approvals, resuming, and the step list tell steps apart by id.
+    public static func uniqueIDs(_ steps: [Step]) -> [Step] {
+        var seen: Set<String> = []
+        return steps.map { step in
+            var step = step
+            while step.id.isEmpty || seen.contains(step.id) { step.id = newID() }
+            seen.insert(step.id)
+            return step
+        }
+    }
 }
 
 /// `{name}` placeholders in what a step types or opens, filled with values asked when the skill
 /// runs (or given by its trigger, like the file that arrived).
 public enum Variables {
     /// The parameters that can hold placeholders.
-    static let fields = ["text", "link"]
+    static let fields = ["text", "link", "playlist", "path", "to", "subject", "body"]
 
     /// Placeholder names in the steps, in order of first use.
     public static func names(in steps: [SkillDefinition.Step]) -> [String] {

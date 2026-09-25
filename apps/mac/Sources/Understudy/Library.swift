@@ -92,6 +92,13 @@ struct Receipt: Codable, Identifiable {
     var status: String { isRun ? outcome ?? "Finished" : missingSpend ? "Needs input" : "Ready for your review" }
     var readyToSend: Bool { isRun ? outcome == "Completed" : !missingSpend }
 
+    /// A run's outcome, from the first line of its report ("Name · Stopped"), as the account
+    /// stores the report but not the outcome. Nil when the report doesn't say.
+    static func outcome(fromReport report: String) -> String? {
+        let first = report.prefix { $0 != "\n" }
+        return ["Completed", "Blocked · needs you", "Stopped"].first { first.hasSuffix(" · " + $0) }
+    }
+
     /// One line per step, used by the notch strip and stored in `receipts.steps`.
     var steps: [ReceiptStep] {
         if let ranSteps { return ranSteps }

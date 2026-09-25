@@ -107,7 +107,7 @@ private struct ReceiptRow: Decodable {
         let run = kind == "run"
         return Receipt(id: id, date: created_at, skillName: skill_name ?? "Skill", client: client ?? "",
                        missingSpend: !run && !ready_to_send, report: report ?? "", rules: "",
-                       ranSteps: run ? steps ?? [] : nil, outcome: run ? (ready_to_send ? "Completed" : "Blocked · needs you") : nil,
+                       ranSteps: run ? steps ?? [] : nil, outcome: run ? Receipt.outcome(fromReport: report ?? "") ?? (ready_to_send ? "Completed" : "Blocked · needs you") : nil,
                        skillID: skill_id)
     }
 }

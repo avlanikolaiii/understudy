@@ -16,6 +16,8 @@ final class RunController: ObservableObject {
     @Published private(set) var lastReceipt: UUID?
     /// Called with each new run receipt, so the Receipts page shows it.
     var onReceipt: (UUID) -> Void = { _ in }
+    /// Tells the person when a run ends or waits for them (title, body, page to open).
+    var notify: (String, String, String) -> Void = { _, _, _ in }
 
     private let library: SkillLibrary
     private let activity: NotchActivity
@@ -45,7 +47,8 @@ final class RunController: ObservableObject {
         self.skill = skill
         self.mode = mode
         let record = library.recorder(for: skill)
-        let engine = RunEngine(steps: skill.definition.steps, mode: mode, performer: performer, startingAt: index,
+        // Skills saved before ids were kept unique may repeat one.
+        let engine = RunEngine(steps: ManualStep.uniqueIDs(skill.definition.steps), mode: mode, performer: performer, startingAt: index,
                                values: skill.defaultValues.merging(values) { $1 }, wait: wait) { [weak self] event in
             self?.handle(event, record: record)
         }
@@ -70,7 +73,11 @@ final class RunController: ObservableObject {
             lastReceipt = receipt.id
             onReceipt(receipt.id)
             activity.showRunReceipt(receipt)
+            notify(skill.name, receipt.status == "Completed" ? "Done: every step ran." : "\(receipt.status). See the receipt.", "results")
             return
+        }
+        if case .paused(let index, .approval) = event {
+            notify("\(skill.name) needs your OK", engine.steps[index].intent, "skills")
         }
         activity.showRun(skill.name, steps: engine.steps, results: engine.results, current: engine.current, pause: engine.pause)
     }
