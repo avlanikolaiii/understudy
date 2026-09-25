@@ -794,7 +794,7 @@ final class SelfTest {
     }
 
     /// A link (understudy://run) or the notch's menu: another app or a stray click could have
-    /// started it, so it always counts down first, like a trigger.
+    /// started it; it starts at once (no countdown), or waits its turn behind a run.
     private func runFromOutside(_ skill: Skill, link: Bool) async {
         let scheduler = app.env.scheduler, runner = app.env.runner
         let wasRunning = runner.isRunning, watching = app.env.watch.isWatching
@@ -819,12 +819,13 @@ final class SelfTest {
             app.notch.menu.choose(skill.id)
             expect(app.env.activity.mode != .menu, "menu.closesOnChoice", "choosing a skill closes the notch menu")
         }
-        // Queued for the countdown at once (never started directly), when nothing else is going on.
-        if !wasRunning && !watching && !wasPending {
-            expect((scheduler.pending != nil || scheduler.isQueued(skill.id)) && !(runner.isRunning && runner.skill?.id == skill.id),
-                   link ? "link.countdownFirst" : "menu.countdownFirst", "a run from a link or the notch menu counts down before it starts")
-        }
         await pump(5)
+        // No countdown: when nothing else is going on, it's running (or ran) right away, or says why not.
+        if !wasRunning && !watching && !wasPending {
+            expect(!(app.env.activity.mode == .scheduled && scheduler.pending?.id == skill.id)
+                   && ((runner.skill?.id == skill.id && !runner.results.isEmpty) || runner.problem != nil || scheduler.isQueued(skill.id)),
+                   link ? "link.startsAtOnce" : "menu.startsAtOnce", "a run from a link or the notch menu starts right away, without a countdown")
+        }
     }
 
     /// A link naming no skill says so in the notch and runs nothing.

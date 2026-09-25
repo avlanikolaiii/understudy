@@ -213,7 +213,9 @@ final class Scheduler: ObservableObject {
                 await self.sleep(15); waited += 15
                 if Task.isCancelled { return }
             }
-            for remaining in stride(from: Int(Self.countdown), to: 0, by: -1) {
+            // Only triggers count down (they start while the person may be busy). A run the person
+            // asked for starts as soon as nothing else is running.
+            for remaining in stride(from: entry.triggered ? Int(Self.countdown) : 0, to: 0, by: -1) {
                 // A run started by hand, or Watch started, meanwhile: this one waits its turn again.
                 if self.runner.isRunning || self.busy() {
                     self.pending = nil; self.pendingEntry = nil

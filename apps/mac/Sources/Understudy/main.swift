@@ -238,7 +238,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return named.first.map { .success($0) } ?? .failure(.init(message: "No skill with steps is called that."))
     }
 
-    /// A link came from another app, so the run counts down first (and can be cancelled).
+    /// A link (from Shortcuts, Raycast, Terminal): the run starts at once, or next if one is going.
     func runFromLink(_ url: URL) {
         let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
         let wanted = (items.first { $0.name == "skill" }?.value ?? "").trimmingCharacters(in: .whitespaces)
@@ -252,7 +252,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         env.scheduler.fire(skill, values: values, triggered: false)
     }
 
-    /// Chosen from the notch's menu: counts down like a trigger, so a stray click can be undone.
+    /// Chosen from the notch's menu: the run starts at once, or next if one is going.
     func runFromMenu(_ skill: Skill) { env.scheduler.fire(skill, triggered: false) }
 
     /// Opens the menu out of the notch with the skills that can run, newest first.
