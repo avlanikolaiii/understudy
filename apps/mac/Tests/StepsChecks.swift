@@ -80,6 +80,9 @@ struct StepsChecks {
         let key = ManualStep.keys("⌘K", keyCode: 40, app: "Superhuman", bundle: nil)
         precondition(key.parameters["keyCode"] == "40" && key.intent == "Press ⌘K" && !key.effect.needsApproval)
         precondition(ManualStep.keys("⌘↩", keyCode: nil, app: nil, bundle: nil).effect.needsApproval)
+        // Repeated ids (a step recorded again) are renamed; the first keeps its id, order is kept.
+        let twice = ManualStep.uniqueIDs([ManualStep.waitSeconds(1), ManualStep.waitSeconds(2)].map { var s = $0; s.id = "step-1"; return s })
+        precondition(twice[0].id == "step-1" && twice[1].id != "step-1" && twice[1].parameters["seconds"] == "2")
         // Shortcuts that send or delete wait for the person's OK, recorded or added by hand.
         for keys in ["⌘↩", "⇧⌘D", "⌫", "⌘⌫", "⇧⌘⌫", "#"] {
             precondition(StepsFromRecording.effect(ofKeys: keys).needsApproval, keys)

@@ -130,7 +130,7 @@ final class WorkspaceState: ObservableObject {
         updated.name = editName.trimmingCharacters(in: .whitespacesAndNewlines)
         updated.client = editClient.trimmingCharacters(in: .whitespacesAndNewlines)
         updated.definition.rules = SkillDefinition.Rule.lines(editNotes)
-        updated.definition.steps = editSteps
+        updated.definition.steps = ManualStep.uniqueIDs(editSteps)
         // Placeholders keep their defaults as inputs the person is asked for ("ask").
         updated.definition.inputs = updated.definition.inputs.filter { $0.connector != "ask" }
             + Variables.names(in: editSteps).map { .init(id: $0, name: $0, connector: "ask", location: editDefaults[$0] ?? "") }
@@ -204,6 +204,7 @@ final class WorkspaceState: ObservableObject {
         watch.stop()
         if let recording = watch.recording, !recording.actions.isEmpty, editSteps.indices.contains(target.index) {
             editSteps.replaceSubrange(target.index...target.index, with: StepsFromRecording.steps(from: recording))
+            editSteps = ManualStep.uniqueIDs(editSteps)
         }
         replacing = nil
         watch.dismiss()

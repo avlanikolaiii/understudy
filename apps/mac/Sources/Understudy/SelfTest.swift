@@ -610,10 +610,11 @@ final class SelfTest {
 
     private func deleteSkill(_ skill: Skill) async {
         let library = app.env.library
-        let receipts = library.receipts.count
+        // Every receipt stays (a queued run of another skill may add one meanwhile).
+        let receipts = Set(library.receipts.map(\.id))
         app.env.ui.deleteSkill(skill, library: library, runner: app.env.runner)
         await pump(20)
-        expect(!library.skills.contains { $0.id == skill.id } && library.receipts.count == receipts && !library.skills.isEmpty,
+        expect(!library.skills.contains { $0.id == skill.id } && receipts.isSubset(of: library.receipts.map(\.id)) && !library.skills.isEmpty,
                "skill.delete", "Delete removes the skill and keeps its receipts")
     }
 
@@ -817,15 +818,17 @@ final class SelfTest {
     }
 
     private func rehearse() async {
-        let before = app.env.library.receipts.count
+        // Rehearsal receipts only: a queued run that ended just before may have added its own.
+        let before = app.env.library.receipts.filter { !$0.isRun }.count
         let missing = app.env.ui.scenario == .missing
         app.env.ui.rehearseActiveSkill(library: app.env.library, activity: app.env.activity)
         visit("notch.rehearsing")
         expect(app.env.activity.mode == .rehearsing && app.env.activity.dot == .rehearse, "rehearse.showsReadOnly",
                "rehearsing must show the blue read-only strip")
-        await waitUntil(3) { self.app.env.library.receipts.count > before || self.app.env.activity.mode != .rehearsing }
-        expect(app.env.library.receipts.count == before + 1, "rehearse.addsOneReceipt", "a finished rehearsal must add exactly one receipt")
-        guard let receipt = app.env.library.receipts.first else { return }
+        await waitUntil(3) { self.app.env.library.receipts.filter { !$0.isRun }.count > before || self.app.env.activity.mode != .rehearsing }
+        expect(app.env.library.receipts.filter { !$0.isRun }.count == before + 1, "rehearse.addsOneReceipt", "a finished rehearsal must add exactly one receipt")
+        expect(!app.env.runner.isRunning, "rehearse.noRunDuring", "no run starts during a rehearsal")
+        guard let receipt = app.env.library.receipts.first(where: { !$0.isRun }) else { return }
         expect(receipt.missingSpend == missing, "rehearse.caseMatches", "the receipt must match the chosen case")
         if missing {
             expect(receipt.report.contains("(DRAFT, incomplete)") && receipt.report.contains("[missing: needs input]"),
@@ -871,6 +874,9 @@ final class SelfTest {
         expect(ui.page != nil && (0...2).contains(ui.teachingStep), "state.valid", "page must be set and Teach step within 1–3")
         expect(app.env.library.mode == .sample && app.env.model.client == nil, "sample.noServer", "a Mac without a server stays in Sample mode")
         expect(!app.env.library.skills.isEmpty, "skills.nonEmpty", "there is always at least one skill")
+        for list in [ui.draftSteps, ui.editSteps] + app.env.library.skills.map(\.definition.steps) {
+            expect(Set(list.map(\.id)).count == list.count, "steps.uniqueIDs", "a skill's steps never share an id")
+        }
         expect(activity.rows.count <= 4, "notch.rowCap", "the notch shows at most 4 rows")
         switch activity.mode {
         case .idle: break

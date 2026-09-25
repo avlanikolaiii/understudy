@@ -47,7 +47,8 @@ final class RunController: ObservableObject {
         self.skill = skill
         self.mode = mode
         let record = library.recorder(for: skill)
-        let engine = RunEngine(steps: skill.definition.steps, mode: mode, performer: performer, startingAt: index,
+        // Skills saved before ids were kept unique may repeat one.
+        let engine = RunEngine(steps: ManualStep.uniqueIDs(skill.definition.steps), mode: mode, performer: performer, startingAt: index,
                                values: skill.defaultValues.merging(values) { $1 }, wait: wait) { [weak self] event in
             self?.handle(event, record: record)
         }

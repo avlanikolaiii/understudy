@@ -224,6 +224,14 @@ final class Scheduler: ObservableObject {
                 await self.sleep(1)
                 if Task.isCancelled { return }
             }
+            // Watch, a rehearsal, or a run by hand may have begun during the last second.
+            if self.runner.isRunning || self.busy() {
+                self.pending = nil; self.pendingEntry = nil
+                self.countdownTask = nil
+                self.queue.insert(entry, at: 0)
+                self.activity.hideCountdown()
+                return self.waitForRunThenNext()
+            }
             self.pending = nil; self.pendingEntry = nil
             self.countdownTask = nil
             // The skill as it is now (edited, deleted, or signed out meanwhile).

@@ -58,6 +58,18 @@ public enum ManualStep {
     }
 
     static func newID() -> String { "manual-" + UUID().uuidString.prefix(8).lowercased() }
+
+    /// The steps with any repeated id given a new one (a step recorded again brings its own
+    /// "step-1", …). Approvals, resuming, and the step list tell steps apart by id.
+    public static func uniqueIDs(_ steps: [Step]) -> [Step] {
+        var seen: Set<String> = []
+        return steps.map { step in
+            var step = step
+            while step.id.isEmpty || seen.contains(step.id) { step.id = newID() }
+            seen.insert(step.id)
+            return step
+        }
+    }
 }
 
 /// `{name}` placeholders in what a step types or opens, filled with values asked when the skill
